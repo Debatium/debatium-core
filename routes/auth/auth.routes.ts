@@ -2,8 +2,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import { validateJson } from "../../middleware/validateJson.js";
 import { requireAuth } from "../../middleware/requireAuth.js";
 import { ErrorCode, errorResponse } from "../../utils/errors.js";
-import { loginService, logoutService, SESSION_EXPIRATION_SECONDS } from "./auth.services.js";
-import { registerUserService } from "./auth.services.js";
+import { loginService, logoutService, refreshService, registerUserService } from "./auth.services.js";
 
 export function createAuthRouter(isProd: boolean): Router {
   const router = Router();
@@ -27,52 +26,53 @@ export function createAuthRouter(isProd: boolean): Router {
     }
   );
 
-  // POST /auth/login
+  // POST /auth/login — returns accessToken, refreshToken, user profile
   router.post(
     "/login",
     validateJson(["email", "password"]),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const { email, password } = req.body;
-
         if (!email || !password) {
           errorResponse(res, 400, ErrorCode.MISSING_REQUIRED_FIELD, "Email and password are required");
           return;
         }
 
-        const sessionId = await loginService(email, password);
-
-        res.cookie("id", sessionId, {
-          httpOnly: true,
-          secure: isProd,
-          sameSite: isProd ? "strict" : "lax",
-          maxAge: SESSION_EXPIRATION_SECONDS * 1000,
-        });
-
-        res.status(200).json({ message: "Successfully logged in" });
+        const result = await loginService(email, password);
+        res.status(200).json(result);
       } catch (err) {
         next(err);
       }
     }
   );
 
-  // POST /auth/logout
+  // POST /auth/refresh — exchange refresh token for new access token
+  router.post(
+    "/refresh",
+    validateJson(["refreshToken"]),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const { refreshToken } = req.body;
+        if (!refreshToken) {
+          errorResponse(res, 400, ErrorCode.MISSING_REQUIRED_FIELD, "Refresh token is required");
+          return;
+        }
+
+        const result = await refreshService(refreshToken);
+        res.status(200).json(result);
+      } catch (err) {
+        next(err);
+      }
+    }
+  );
+
+  // POST /auth/logout — invalidate refresh token
   router.post(
     "/logout",
     requireAuth(isProd),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
-        const sessionId = req.cookies?.id;
-        await logoutService(sessionId);
-
-        res.cookie("id", "", {
-          expires: new Date(0),
-          maxAge: 0,
-          httpOnly: true,
-          secure: isProd,
-          sameSite: isProd ? "strict" : "lax",
-        });
-
+        await logoutService(req.userId!);
         res.status(200).json({ message: "Successfully logged out" });
       } catch (err) {
         next(err);
@@ -102,16 +102,11 @@ export class ValueError extends Error {
 function classifyPgError(err: unknown): { code: ErrorCode; message: string; status: number } | null {
   const pgErr = err as { code?: string };
   if (!pgErr.code) return null;
-
   switch (pgErr.code) {
-    case "23505":
-      return { code: ErrorCode.INVALID_FIELD_VALUE, message: "Username or email is already taken.", status: 400 };
-    case "23503":
-      return { code: ErrorCode.INVALID_FIELD_VALUE, message: "A referenced record does not exist.", status: 400 };
+    case "23505": return { code: ErrorCode.INVALID_FIELD_VALUE, message: "Username or email is already taken.", status: 400 };
+    case "23503": return { code: ErrorCode.INVALID_FIELD_VALUE, message: "A referenced record does not exist.", status: 400 };
     default:
-      if (pgErr.code.startsWith("23")) {
-        return { code: ErrorCode.INVALID_FIELD_VALUE, message: "Something is invalid about your data.", status: 400 };
-      }
+      if (pgErr.code.startsWith("23")) return { code: ErrorCode.INVALID_FIELD_VALUE, message: "Something is invalid about your data.", status: 400 };
       return null;
   }
 }

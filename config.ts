@@ -4,6 +4,8 @@ export interface AppConfig {
   databaseUrl: string;
   upstashRedisRestUrl: string;
   upstashRedisRestToken: string;
+  jwtAccessSecret: string;
+  jwtRefreshSecret: string;
   logFilePath?: string;
 }
 
@@ -18,6 +20,8 @@ const configs: Record<string, AppConfig> = {
       "postgresql://user:password@localhost:5440/dev_db",
     upstashRedisRestUrl: process.env.UPSTASH_REDIS_REST_URL || "",
     upstashRedisRestToken: process.env.UPSTASH_REDIS_REST_TOKEN || "",
+    jwtAccessSecret: process.env.JWT_ACCESS_SECRET || "dev-access-secret",
+    jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || "dev-refresh-secret",
     logFilePath: process.env.LOG_FILE_PATH,
   },
   prod: {
@@ -26,6 +30,8 @@ const configs: Record<string, AppConfig> = {
     databaseUrl: process.env.DATABASE_URL || "",
     upstashRedisRestUrl: process.env.UPSTASH_REDIS_REST_URL || "",
     upstashRedisRestToken: process.env.UPSTASH_REDIS_REST_TOKEN || "",
+    jwtAccessSecret: process.env.JWT_ACCESS_SECRET || "",
+    jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || "",
     logFilePath: process.env.LOG_FILE_PATH,
   },
   testing: {
@@ -36,6 +42,8 @@ const configs: Record<string, AppConfig> = {
       "postgresql://user:password@localhost:5444/test_db",
     upstashRedisRestUrl: process.env.UPSTASH_REDIS_REST_URL || "",
     upstashRedisRestToken: process.env.UPSTASH_REDIS_REST_TOKEN || "",
+    jwtAccessSecret: process.env.JWT_ACCESS_SECRET || "test-access-secret",
+    jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || "test-refresh-secret",
     logFilePath: process.env.LOG_FILE_PATH,
   },
 };

@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { getRedis } from "../extensions/redis.js";
+import { verifyAccessToken } from "../utils/jwt.js";
 import { ErrorCode } from "../utils/errors.js";
 
 declare global {
@@ -10,46 +10,27 @@ declare global {
   }
 }
 
-function clearCookieResponse(
-  res: Response,
-  message: string,
-  isProd: boolean
-): Response {
-  res.cookie("id", "", {
-    expires: new Date(0),
-    maxAge: 0,
-    httpOnly: true,
-    secure: isProd,
-    sameSite: isProd ? "strict" : "lax",
-  });
+export function requireAuth(_isProd: boolean) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const authHeader = req.headers.authorization;
 
-  return res.status(401).json({
-    error: { code: ErrorCode.UNAUTHORIZED, message },
-  });
-}
-
-export function requireAuth(isProd: boolean) {
-  return async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ): Promise<void> => {
-    const sessionId = req.cookies?.id;
-
-    if (!sessionId) {
-      clearCookieResponse(res, "Missing authentication information", isProd);
+    if (!authHeader?.startsWith("Bearer ")) {
+      res.status(401).json({
+        error: { code: ErrorCode.UNAUTHORIZED, message: "Missing authentication token" },
+      });
       return;
     }
 
-    const redis = getRedis();
-    const userId = await redis.get<string>(sessionId);
+    const token = authHeader.slice(7);
 
-    if (!userId) {
-      clearCookieResponse(res, "Invalid or expired session", isProd);
-      return;
+    try {
+      const payload = verifyAccessToken(token);
+      req.userId = payload.userId;
+      next();
+    } catch {
+      res.status(401).json({
+        error: { code: ErrorCode.UNAUTHORIZED, message: "Invalid or expired token" },
+      });
     }
-
-    req.userId = userId;
-    next();
   };
 }

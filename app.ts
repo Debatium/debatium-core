@@ -6,6 +6,7 @@ import type { Request, Response, NextFunction } from "express";
 import { type AppConfig } from "./config.js";
 import { initPool } from "./extensions/db.js";
 import { initRedis } from "./extensions/redis.js";
+import { initJwt } from "./utils/jwt.js";
 import { createLogger } from "./utils/logger.js";
 import { validateRequest } from "./middleware/validateRequest.js";
 import { corsMiddleware } from "./middleware/cors.js";
@@ -22,6 +23,7 @@ export function createApp(config: AppConfig) {
   // Initialize extensions
   initPool(config);
   initRedis(config);
+  initJwt(config.jwtAccessSecret, config.jwtRefreshSecret);
 
   // Core middleware
   app.use(express.json());

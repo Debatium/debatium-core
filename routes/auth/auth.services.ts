@@ -6,6 +6,10 @@ import { getRedis } from "../../extensions/redis.js";
 import { DomainValidationError } from "../../db/exceptions.js";
 import { ValueError } from "./auth.routes.js";
 import {
+  signAccessToken, signRefreshToken, verifyRefreshToken,
+  REFRESH_TOKEN_EXPIRY_SECONDS,
+} from "../../utils/jwt.js";
+import {
   FullName, Username, Email, Institution, Password, AvatarURL,
   DebaterLevel, JudgeLevel,
   type User,
@@ -21,18 +25,22 @@ import {
   insertTournamentEntry,
 } from "../../db/tournaments/queries.js";
 
-export const SESSION_EXPIRATION_SECONDS = 1 * 24 * 60 * 60;
+export interface AuthTokens {
+  accessToken: string;
+  refreshToken: string;
+  user: { id: string; fullName: string; username: string; email: string; avatarURL: string };
+}
 
-// ── Login / Logout ──
+// ── Login ──
 
 export async function loginService(
   email: string,
   password: string
-): Promise<string> {
+): Promise<AuthTokens> {
   const pool = getPool();
 
   const result = await pool.query(
-    "SELECT id, password FROM users WHERE email = $1",
+    "SELECT id, password, full_name, username, email, avatar_url FROM users WHERE email = $1",
     [email]
   );
 
@@ -47,35 +55,64 @@ export async function loginService(
   }
 
   const userId = String(user.id);
+
+  // Generate tokens
+  const accessToken = signAccessToken({ userId });
+  const refreshToken = signRefreshToken({ userId });
+
+  // Store refresh token in Redis (invalidate old one)
   const redis = getRedis();
+  const refreshKey = `refresh:${userId}`;
+  const oldToken = await redis.get<string>(refreshKey);
+  if (oldToken) await redis.del(`rt:${oldToken}`);
 
-  const activeSessionKey = `user:${userId}:session`;
-  const existingSessionId = await redis.get<string>(activeSessionKey);
+  // Store: refreshKey -> token, rt:token -> userId
+  await redis.set(refreshKey, refreshToken, { ex: REFRESH_TOKEN_EXPIRY_SECONDS });
+  await redis.set(`rt:${refreshToken}`, userId, { ex: REFRESH_TOKEN_EXPIRY_SECONDS });
 
-  if (existingSessionId) {
-    await redis.del(existingSessionId);
-  }
-
-  const sessionId = crypto.randomBytes(32).toString("hex");
-
-  await redis.set(sessionId, userId, { ex: SESSION_EXPIRATION_SECONDS });
-  await redis.set(activeSessionKey, sessionId, {
-    ex: SESSION_EXPIRATION_SECONDS,
-  });
-
-  return sessionId;
+  return {
+    accessToken,
+    refreshToken,
+    user: {
+      id: userId,
+      fullName: user.full_name,
+      username: user.username,
+      email: user.email,
+      avatarURL: String(user.avatar_url ?? "1"),
+    },
+  };
 }
 
-export async function logoutService(sessionId: string): Promise<void> {
-  const redis = getRedis();
-  const userId = await redis.get<string>(sessionId);
+// ── Refresh ──
 
-  if (userId) {
-    const activeSessionKey = `user:${userId}:session`;
-    await redis.del(activeSessionKey);
+export async function refreshService(refreshToken: string): Promise<{ accessToken: string }> {
+  // Verify the JWT signature
+  let payload;
+  try {
+    payload = verifyRefreshToken(refreshToken);
+  } catch {
+    throw new ValueError("Invalid or expired refresh token.");
   }
 
-  await redis.del(sessionId);
+  // Check if refresh token is still valid in Redis
+  const redis = getRedis();
+  const storedUserId = await redis.get<string>(`rt:${refreshToken}`);
+  if (!storedUserId || storedUserId !== payload.userId) {
+    throw new ValueError("Invalid or expired refresh token.");
+  }
+
+  // Issue new access token
+  return { accessToken: signAccessToken({ userId: payload.userId }) };
+}
+
+// ── Logout ──
+
+export async function logoutService(userId: string): Promise<void> {
+  const redis = getRedis();
+  const refreshKey = `refresh:${userId}`;
+  const token = await redis.get<string>(refreshKey);
+  if (token) await redis.del(`rt:${token}`);
+  await redis.del(refreshKey);
 }
 
 // ── Register ──
