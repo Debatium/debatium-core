@@ -78,6 +78,39 @@ const options: swaggerJsdoc.Options = {
             },
           },
         },
+        SparMember: {
+          type: "object",
+          properties: {
+            userId: { type: "string" },
+            fullName: { type: "string" },
+            username: { type: "string" },
+            avatarURL: { type: "integer" },
+            judgeLevel: { type: "string" },
+            debaterLevel: { type: "string" },
+            role: { type: "string", enum: ["debater", "judge", "observer"] },
+            isHost: { type: "boolean" },
+            status: { type: "string", enum: ["pending", "accepted", "declined", "invited"] },
+          },
+        },
+        Spar: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            name: { type: "string" },
+            time: { type: "string", example: "10/04/2026 20:00" },
+            rule: { type: "string", enum: ["bp", "wsdc"] },
+            status: { type: "string", enum: ["created", "matching", "ready", "debating", "done", "cancelled"] },
+            expectedDebaterLevel: { type: "string", enum: ["novice", "open", "pro"] },
+            expectedJudgeLevel: { type: "string", nullable: true },
+            expectingJudge: { type: "boolean" },
+            motion: { type: "string", nullable: true },
+            meetLink: { type: "string", nullable: true },
+            prepLinks: { type: "array", items: { type: "object", properties: { team: { type: "string" }, link: { type: "string" } } } },
+            members: { type: "array", items: { $ref: "#/components/schemas/SparMember" } },
+            isHost: { type: "boolean", nullable: true },
+            memberCount: { type: "integer" },
+          },
+        },
         Availability: {
           type: "object",
           properties: {
@@ -93,10 +126,10 @@ const options: swaggerJsdoc.Options = {
         },
       },
       securitySchemes: {
-        cookieAuth: {
-          type: "apiKey",
-          in: "cookie",
-          name: "id",
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "JWT",
         },
       },
     },
@@ -257,7 +290,7 @@ const options: swaggerJsdoc.Options = {
         post: {
           tags: ["Auth"],
           summary: "Logout (invalidate session)",
-          security: [{ cookieAuth: [] }],
+          security: [{ bearerAuth: [] }],
           responses: {
             "200": { description: "Logged out successfully" },
             "401": { description: "Not authenticated" },
@@ -270,7 +303,7 @@ const options: swaggerJsdoc.Options = {
         get: {
           tags: ["Users"],
           summary: "Get own profile",
-          security: [{ cookieAuth: [] }],
+          security: [{ bearerAuth: [] }],
           responses: {
             "200": { description: "User profile", content: { "application/json": { schema: { $ref: "#/components/schemas/UserProfile" } } } },
             "404": { description: "Profile not found" },
@@ -279,7 +312,7 @@ const options: swaggerJsdoc.Options = {
         put: {
           tags: ["Users"],
           summary: "Update own profile",
-          security: [{ cookieAuth: [] }],
+          security: [{ bearerAuth: [] }],
           requestBody: {
             required: true,
             content: {
@@ -356,7 +389,7 @@ const options: swaggerJsdoc.Options = {
         get: {
           tags: ["Calendar"],
           summary: "Get user's availability calendar",
-          security: [{ cookieAuth: [] }],
+          security: [{ bearerAuth: [] }],
           responses: {
             "200": {
               description: "Calendar data",
@@ -376,7 +409,7 @@ const options: swaggerJsdoc.Options = {
         post: {
           tags: ["Calendar"],
           summary: "Add availability slot",
-          security: [{ cookieAuth: [] }],
+          security: [{ bearerAuth: [] }],
           requestBody: {
             required: true,
             content: {
@@ -404,7 +437,7 @@ const options: swaggerJsdoc.Options = {
         put: {
           tags: ["Calendar"],
           summary: "Update availability slot",
-          security: [{ cookieAuth: [] }],
+          security: [{ bearerAuth: [] }],
           requestBody: {
             required: true,
             content: {
@@ -433,7 +466,7 @@ const options: swaggerJsdoc.Options = {
         delete: {
           tags: ["Calendar"],
           summary: "Delete availability slot",
-          security: [{ cookieAuth: [] }],
+          security: [{ bearerAuth: [] }],
           requestBody: {
             required: true,
             content: {
@@ -458,7 +491,7 @@ const options: swaggerJsdoc.Options = {
         get: {
           tags: ["Calendar"],
           summary: "Get or create calendar subscription links",
-          security: [{ cookieAuth: [] }],
+          security: [{ bearerAuth: [] }],
           responses: {
             "200": {
               description: "Calendar links for Apple, Google, Outlook",
@@ -480,6 +513,176 @@ const options: swaggerJsdoc.Options = {
                 },
               },
             },
+          },
+        },
+      },
+
+      // ── Spars ──
+      "/spars/": {
+        post: {
+          tags: ["Spars"],
+          summary: "Create a new spar",
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["name", "time", "rule", "expectedDebaterLevel"],
+                  properties: {
+                    name: { type: "string", example: "John's Spar" },
+                    time: { type: "string", example: "10/04/2026 20:00", description: "DD/MM/YYYY HH:MM" },
+                    rule: { type: "string", enum: ["bp", "wsdc"], example: "bp" },
+                    role: { type: "string", enum: ["debater", "judge"], example: "debater" },
+                    expectedDebaterLevel: { type: "string", enum: ["novice", "open", "pro"], example: "open" },
+                    expectedJudgeLevel: { type: "string", enum: ["novice", "intermediate", "advanced", "expert"], nullable: true },
+                    motion: { type: "string", nullable: true },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "201": { description: "Spar created", content: { "application/json": { schema: { type: "object", properties: { message: { type: "string" }, sparId: { type: "string" } } } } } },
+            "400": { description: "Validation error", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+          },
+        },
+        get: {
+          tags: ["Spars"],
+          summary: "List available spars (optional auth)",
+          description: "Returns spars the user hasn't joined. Auth is optional — if provided, filters out user's own spars.",
+          responses: {
+            "200": { description: "List of spars", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/Spar" } } } } },
+          },
+        },
+        delete: {
+          tags: ["Spars"],
+          summary: "Cancel spar (host only)",
+          security: [{ bearerAuth: [] }],
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["sparId"], properties: { sparId: { type: "string" } } } } } },
+          responses: {
+            "200": { description: "Spar cancelled" },
+            "400": { description: "Error", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+          },
+        },
+      },
+      "/spars/me": {
+        get: {
+          tags: ["Spars"],
+          summary: "List user's active spars",
+          security: [{ bearerAuth: [] }],
+          responses: {
+            "200": { description: "List of active spars with notifications", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/Spar" } } } } },
+          },
+        },
+      },
+      "/spars/me/history": {
+        get: {
+          tags: ["Spars"],
+          summary: "List user's completed/cancelled spars",
+          security: [{ bearerAuth: [] }],
+          responses: {
+            "200": { description: "List of past spars", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/Spar" } } } } },
+          },
+        },
+      },
+      "/spars/request": {
+        post: {
+          tags: ["Spars"],
+          summary: "Request to join a spar",
+          security: [{ bearerAuth: [] }],
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["sparId"], properties: { sparId: { type: "string" }, role: { type: "string", enum: ["debater", "judge", "observer"], example: "debater" } } } } } },
+          responses: {
+            "200": { description: "Request sent" },
+            "400": { description: "Error", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+          },
+        },
+      },
+      "/spars/invite": {
+        post: {
+          tags: ["Spars"],
+          summary: "Invite a user to spar (host only)",
+          security: [{ bearerAuth: [] }],
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["sparId", "userId"], properties: { sparId: { type: "string" }, userId: { type: "string" }, role: { type: "string", enum: ["debater", "judge"], example: "debater" } } } } } },
+          responses: {
+            "200": { description: "User invited" },
+            "400": { description: "Error", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+          },
+        },
+      },
+      "/spars/matching": {
+        post: {
+          tags: ["Spars"],
+          summary: "Start matching (host only)",
+          security: [{ bearerAuth: [] }],
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["sparId"], properties: { sparId: { type: "string" } } } } } },
+          responses: {
+            "200": { description: "Status changed to matching" },
+            "400": { description: "Error", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+          },
+        },
+      },
+      "/spars/cancel-matching": {
+        post: {
+          tags: ["Spars"],
+          summary: "Cancel matching (host only)",
+          security: [{ bearerAuth: [] }],
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["sparId"], properties: { sparId: { type: "string" } } } } } },
+          responses: {
+            "200": { description: "Status reverted to created" },
+            "400": { description: "Error", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+          },
+        },
+      },
+      "/spars/accept": {
+        post: {
+          tags: ["Spars"],
+          summary: "Accept a join request or invitation",
+          description: "If targetUserId is provided: host accepts a pending request. If omitted: invited user accepts their own invitation.",
+          security: [{ bearerAuth: [] }],
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["sparId"], properties: { sparId: { type: "string" }, targetUserId: { type: "string", description: "Required for host accepting a request" } } } } } },
+          responses: {
+            "200": { description: "Accepted" },
+            "400": { description: "Error", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+          },
+        },
+      },
+      "/spars/decline": {
+        post: {
+          tags: ["Spars"],
+          summary: "Decline a join request or invitation",
+          description: "If targetUserId is provided: host declines a request. If omitted: invited user declines their own invitation.",
+          security: [{ bearerAuth: [] }],
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["sparId"], properties: { sparId: { type: "string" }, targetUserId: { type: "string" } } } } } },
+          responses: {
+            "200": { description: "Declined" },
+            "400": { description: "Error", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+          },
+        },
+      },
+      "/spars/leave": {
+        post: {
+          tags: ["Spars"],
+          summary: "Leave a spar",
+          description: "If the leaving user is the host, host role is transferred to a judge first, then any other member.",
+          security: [{ bearerAuth: [] }],
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["sparId"], properties: { sparId: { type: "string" } } } } } },
+          responses: {
+            "200": { description: "Left spar" },
+            "400": { description: "Error", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+          },
+        },
+      },
+      "/spars/kick": {
+        post: {
+          tags: ["Spars"],
+          summary: "Kick a member (host only)",
+          security: [{ bearerAuth: [] }],
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["sparId", "targetUserId"], properties: { sparId: { type: "string" }, targetUserId: { type: "string" } } } } } },
+          responses: {
+            "200": { description: "Member kicked" },
+            "400": { description: "Error", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
           },
         },
       },
