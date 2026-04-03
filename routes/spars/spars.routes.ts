@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from "express";
-import { ErrorCode, errorResponse } from "../utils/errors.js";
+import { ErrorCode, errorResponse } from "../../utils/errors.js";
 
 export function createSparsRouter(isProd: boolean): Router {
   const router = Router();

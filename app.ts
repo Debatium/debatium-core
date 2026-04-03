@@ -1,5 +1,6 @@
 import express from "express";
 import cookieParser from "cookie-parser";
+import swaggerUi from "swagger-ui-express";
 import type { Request, Response, NextFunction } from "express";
 
 import { type AppConfig } from "./config.js";
@@ -9,9 +10,10 @@ import { createLogger } from "./utils/logger.js";
 import { validateRequest } from "./middleware/validateRequest.js";
 import { corsMiddleware } from "./middleware/cors.js";
 import { ErrorCode } from "./utils/errors.js";
-import { createAuthRouter } from "./auth/auth.routes.js";
-import { createUsersRouter } from "./users/users.routes.js";
-import { createSparsRouter } from "./spars/spars.routes.js";
+import { swaggerSpec } from "./swagger.js";
+import { createAuthRouter } from "./routes/auth/auth.routes.js";
+import { createUsersRouter } from "./routes/users/users.routes.js";
+import { createSparsRouter } from "./routes/spars/spars.routes.js";
 
 export function createApp(config: AppConfig) {
   const app = express();
@@ -33,15 +35,24 @@ export function createApp(config: AppConfig) {
 
     res.on("finish", () => {
       const duration = performance.now() - start;
-      logger.info({
-        method: req.method,
-        path: req.path,
-        statusCode: res.statusCode,
-        durationMs: Math.round(duration * 100) / 100,
-      }, `${req.method} ${req.path}`);
+      logger.info(
+        {
+          method: req.method,
+          path: req.path,
+          statusCode: res.statusCode,
+          durationMs: Math.round(duration * 100) / 100,
+        },
+        `${req.method} ${req.path}`,
+      );
     });
 
     next();
+  });
+
+  // Swagger docs
+  app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+  app.get("/docs.json", (_req: Request, res: Response) => {
+    res.json(swaggerSpec);
   });
 
   // Health check

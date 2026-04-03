@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:18.3
+    container_name: debatium-core-db
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: dev_db
+    ports:
+      - "5440:5432"
+    volumes:
+      - ./postgres_data:/var/lib/postgresql
+  test_db:
+    image: postgres:18.3
+    container_name: debatium-core-test-db
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: test_db
+    ports:
+      - "5444:5432"

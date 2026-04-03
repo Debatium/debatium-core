@@ -1,12 +1,33 @@
 import { Router, Request, Response, NextFunction } from "express";
-import { validateJson } from "../middleware/validateJson.js";
-import { requireAuth } from "../middleware/requireAuth.js";
-import { ErrorCode, errorResponse } from "../utils/errors.js";
+import { validateJson } from "../../middleware/validateJson.js";
+import { requireAuth } from "../../middleware/requireAuth.js";
+import { ErrorCode, errorResponse } from "../../utils/errors.js";
 import { loginService, logoutService, SESSION_EXPIRATION_SECONDS } from "./auth.services.js";
+import { registerUserService } from "./auth.services.js";
 
 export function createAuthRouter(isProd: boolean): Router {
   const router = Router();
 
+  // POST /auth/register
+  router.post(
+    "/register",
+    validateJson([
+      "fullName", "username", "password", "email",
+      "institution", "tournamentEntries", "avatarURL",
+    ]),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        await registerUserService(req.body);
+        res.status(201).json({ success: { message: "User has registered successfully" } });
+      } catch (err) {
+        const pgInfo = classifyPgError(err);
+        if (pgInfo) return errorResponse(res, pgInfo.status, pgInfo.code, pgInfo.message);
+        next(err);
+      }
+    }
+  );
+
+  // POST /auth/login
   router.post(
     "/login",
     validateJson(["email", "password"]),
@@ -35,6 +56,7 @@ export function createAuthRouter(isProd: boolean): Router {
     }
   );
 
+  // POST /auth/logout
   router.post(
     "/logout",
     requireAuth(isProd),
@@ -74,5 +96,22 @@ export class ValueError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ValueError";
+  }
+}
+
+function classifyPgError(err: unknown): { code: ErrorCode; message: string; status: number } | null {
+  const pgErr = err as { code?: string };
+  if (!pgErr.code) return null;
+
+  switch (pgErr.code) {
+    case "23505":
+      return { code: ErrorCode.INVALID_FIELD_VALUE, message: "Username or email is already taken.", status: 400 };
+    case "23503":
+      return { code: ErrorCode.INVALID_FIELD_VALUE, message: "A referenced record does not exist.", status: 400 };
+    default:
+      if (pgErr.code.startsWith("23")) {
+        return { code: ErrorCode.INVALID_FIELD_VALUE, message: "Something is invalid about your data.", status: 400 };
+      }
+      return null;
   }
 }
