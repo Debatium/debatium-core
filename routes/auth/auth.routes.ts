@@ -39,40 +39,63 @@ export function createAuthRouter(isProd: boolean): Router {
         }
 
         const result = await loginService(email, password);
-        res.status(200).json(result);
+        const { accessToken, refreshToken, user } = result;
+
+        const isProduction = process.env.NODE_ENV === "production" || isProd;
+        res.cookie("accessToken", accessToken, {
+          httpOnly: true,
+          secure: isProduction,
+          sameSite: "lax",
+          path: "/",
+        });
+        res.cookie("refreshToken", refreshToken, {
+          httpOnly: true,
+          secure: isProduction,
+          sameSite: "lax",
+          path: "/",
+        });
+
+        res.status(200).json({ user });
       } catch (err) {
         next(err);
       }
     }
   );
 
-  // POST /auth/refresh — exchange refresh token for new access token
   router.post(
     "/refresh",
-    validateJson(["refreshToken"]),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
-        const { refreshToken } = req.body;
+        const refreshToken = req.cookies.refreshToken;
         if (!refreshToken) {
-          errorResponse(res, 400, ErrorCode.MISSING_REQUIRED_FIELD, "Refresh token is required");
+          errorResponse(res, 401, ErrorCode.UNAUTHORIZED, "Refresh token is missing");
           return;
         }
 
         const result = await refreshService(refreshToken);
-        res.status(200).json(result);
+        const isProduction = process.env.NODE_ENV === "production" || isProd;
+        res.cookie("accessToken", result.accessToken, {
+          httpOnly: true,
+          secure: isProduction,
+          sameSite: "lax",
+          path: "/",
+        });
+
+        res.status(200).json({ success: true });
       } catch (err) {
         next(err);
       }
     }
   );
 
-  // POST /auth/logout — invalidate refresh token
   router.post(
     "/logout",
     requireAuth(isProd),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         await logoutService(req.userId!);
+        res.clearCookie("accessToken", { path: "/" });
+        res.clearCookie("refreshToken", { path: "/" });
         res.status(200).json({ message: "Successfully logged out" });
       } catch (err) {
         next(err);

@@ -12,16 +12,21 @@ declare global {
 
 export function requireAuth(_isProd: boolean) {
   return (req: Request, res: Response, next: NextFunction): void => {
-    const authHeader = req.headers.authorization;
+    let token = req.cookies.accessToken;
 
-    if (!authHeader?.startsWith("Bearer ")) {
+    if (!token) {
+      const authHeader = req.headers.authorization;
+      if (authHeader?.startsWith("Bearer ")) {
+        token = authHeader.slice(7);
+      }
+    }
+
+    if (!token) {
       res.status(401).json({
         error: { code: ErrorCode.UNAUTHORIZED, message: "Missing authentication token" },
       });
       return;
     }
-
-    const token = authHeader.slice(7);
 
     try {
       const payload = verifyAccessToken(token);
