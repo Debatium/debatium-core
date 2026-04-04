@@ -111,6 +111,19 @@ const options: swaggerJsdoc.Options = {
             memberCount: { type: "integer" },
           },
         },
+        Notification: {
+          type: "object",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            eventType: { type: "string", enum: ["INVITE_RECEIVED", "JOIN_REQUEST_RECEIVED", "REQUEST_DECISION", "MEETING_READY", "SPAR_CANCELLED", "ASSIGNED_AS_HOST", "REMOVED_FROM_SPAR", "INVITATION_RESTORED"] },
+            referenceId: { type: "string", format: "uuid", nullable: true },
+            referenceType: { type: "string", nullable: true, example: "spar_room" },
+            payload: { type: "object", nullable: true },
+            status: { type: "string", enum: ["pending", "sent", "read", "failed", "skipped", "cancelled"] },
+            createdAt: { type: "string", format: "date-time" },
+            readAt: { type: "string", format: "date-time", nullable: true },
+          },
+        },
         Availability: {
           type: "object",
           properties: {
@@ -683,6 +696,83 @@ const options: swaggerJsdoc.Options = {
           responses: {
             "200": { description: "Member kicked" },
             "400": { description: "Error", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+          },
+        },
+      },
+      // ── Notifications ──
+      "/notifications": {
+        get: {
+          tags: ["Notifications"],
+          summary: "Get paginated in-app notifications",
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            { name: "limit", in: "query", schema: { type: "integer", default: 20 }, description: "Max results (max 100)" },
+            { name: "offset", in: "query", schema: { type: "integer", default: 0 }, description: "Offset for pagination" },
+          ],
+          responses: {
+            "200": {
+              description: "Paginated notifications",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      data: {
+                        type: "array",
+                        items: { $ref: "#/components/schemas/Notification" },
+                      },
+                      pagination: {
+                        type: "object",
+                        properties: {
+                          limit: { type: "integer" },
+                          offset: { type: "integer" },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/notifications/{id}/read": {
+        patch: {
+          tags: ["Notifications"],
+          summary: "Mark a notification as read",
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            { name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+          ],
+          responses: {
+            "200": { description: "Notification updated", content: { "application/json": { schema: { type: "object", properties: { message: { type: "string" } } } } } },
+          },
+        },
+      },
+      "/notifications/unread-count": {
+        get: {
+          tags: ["Notifications"],
+          summary: "Get unread notification count",
+          security: [{ bearerAuth: [] }],
+          responses: {
+            "200": {
+              description: "Unread count",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      data: {
+                        type: "object",
+                        properties: {
+                          count: { type: "integer", example: 3 },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
       },

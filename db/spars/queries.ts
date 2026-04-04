@@ -31,11 +31,12 @@ export async function createSpar(
   hostData: Record<string, unknown>
 ): Promise<string> {
   const { rows } = await pool.query(
-    `INSERT INTO spars (id, name, time, rule, expected_debater_level, expected_judge_level, expecting_judge, motion)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+    `INSERT INTO spars (id, name, time, rule, expected_debater_level, expected_judge_level, expecting_judge, motion, invite_members)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
     [sparData.id, sparData.name, sparData.time, sparData.rule,
      sparData.expected_debater_level, sparData.expected_judge_level,
-     sparData.expecting_judge ?? false, sparData.motion]
+     sparData.expecting_judge ?? false, sparData.motion,
+     JSON.stringify(sparData.invite_members ?? [])]
   );
   const sparId = String(rows[0].id);
 
@@ -80,6 +81,7 @@ async function fetchSparsWithMembers(
         expectedJudgeLevel: row.expected_judge_level,
         expectingJudge: row.expecting_judge,
         motion: row.motion,
+        inviteMembers: row.invite_members ?? [],
         meetLink: null,
         prepLinks: [],
         members: [],
@@ -95,6 +97,7 @@ async function fetchSparsWithMembers(
         userId: String(memberUserId),
         fullName: row.full_name,
         username: row.username,
+        email: row.email,
         avatarURL: row.avatar_url,
         judgeLevel: row.judge_level,
         debaterLevel: row.debater_level,
@@ -134,8 +137,8 @@ async function fetchSparsWithMembers(
 
 const SPAR_SELECT = `
   SELECT s.id, s.name, s.time, s.rule, s.status, s.expected_debater_level, s.expected_judge_level,
-         s.expecting_judge, s.motion, s.meet_link, s.created_at,
-         u.id as user_id, u.full_name, u.username, u.avatar_url, u.judge_level, u.debater_level,
+         s.expecting_judge, s.motion, s.meet_link, s.invite_members, s.created_at,
+         u.id as user_id, u.full_name, u.username, u.email, u.avatar_url, u.judge_level, u.debater_level,
          sm.role, sm.is_host, sm.status as member_status
   FROM spars s
   LEFT JOIN spar_members sm ON s.id = sm.spar_id
@@ -205,4 +208,36 @@ export async function getSparMembers(pool: DbClient, sparId: string): Promise<Re
 
 export async function updateSparHost(pool: DbClient, sparId: string, userId: string, isHost: boolean): Promise<void> {
   await pool.query(`UPDATE spar_members SET is_host = $1 WHERE spar_id = $2 AND user_id = $3`, [isHost, sparId, userId]);
+}
+
+/**
+ * Update the response field of an invite_members entry by matching email or username.
+ */
+export async function updateInviteMemberResponse(
+  pool: DbClient,
+  sparId: string,
+  identifier: { email?: string; username?: string },
+  response: string
+): Promise<void> {
+  // Find the index of the matching entry and update its response
+  const matchKey = identifier.email ? "email" : "username";
+  const matchValue = identifier.email ?? identifier.username;
+
+  await pool.query(
+    `UPDATE spars
+     SET invite_members = (
+       SELECT jsonb_agg(
+         CASE
+           WHEN elem ->> $2 = $3 THEN jsonb_set(elem, '{response}', to_jsonb($4::text))
+           ELSE elem
+         END
+       )
+       FROM jsonb_array_elements(invite_members) AS elem
+     )
+     WHERE id = $1 AND EXISTS (
+       SELECT 1 FROM jsonb_array_elements(invite_members) AS elem
+       WHERE elem ->> $2 = $3
+     )`,
+    [sparId, matchKey, matchValue, response]
+  );
 }

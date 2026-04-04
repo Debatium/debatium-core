@@ -6,6 +6,7 @@ export interface AppConfig {
   upstashRedisRestToken: string;
   jwtAccessSecret: string;
   jwtRefreshSecret: string;
+  resendApiKey: string;
   logFilePath?: string;
 }
 
@@ -22,6 +23,7 @@ const configs: Record<string, AppConfig> = {
     upstashRedisRestToken: process.env.UPSTASH_REDIS_REST_TOKEN || "",
     jwtAccessSecret: process.env.JWT_ACCESS_SECRET || "dev-access-secret",
     jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || "dev-refresh-secret",
+    resendApiKey: process.env.RESEND_API_KEY || "",
     logFilePath: process.env.LOG_FILE_PATH,
   },
   prod: {
@@ -32,6 +34,7 @@ const configs: Record<string, AppConfig> = {
     upstashRedisRestToken: process.env.UPSTASH_REDIS_REST_TOKEN || "",
     jwtAccessSecret: process.env.JWT_ACCESS_SECRET || "",
     jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || "",
+    resendApiKey: process.env.RESEND_API_KEY || "",
     logFilePath: process.env.LOG_FILE_PATH,
   },
   testing: {
@@ -44,6 +47,7 @@ const configs: Record<string, AppConfig> = {
     upstashRedisRestToken: process.env.UPSTASH_REDIS_REST_TOKEN || "",
     jwtAccessSecret: process.env.JWT_ACCESS_SECRET || "test-access-secret",
     jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || "test-refresh-secret",
+    resendApiKey: process.env.RESEND_API_KEY || "",
     logFilePath: process.env.LOG_FILE_PATH,
   },
 };

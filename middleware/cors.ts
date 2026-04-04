@@ -14,7 +14,7 @@ export function corsMiddleware(isProd: boolean) {
       : DEV_ORIGINS.includes(requestOrigin) ? requestOrigin : DEV_ORIGINS[0];
 
     res.header("Access-Control-Allow-Origin", origin);
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
     res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
     res.header("Access-Control-Allow-Credentials", "true");
 

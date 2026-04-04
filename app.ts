@@ -6,6 +6,7 @@ import type { Request, Response, NextFunction } from "express";
 import { type AppConfig } from "./config.js";
 import { initPool } from "./extensions/db.js";
 import { initRedis } from "./extensions/redis.js";
+import { initResend } from "./extensions/resend.js";
 import { initJwt } from "./utils/jwt.js";
 import { createLogger } from "./utils/logger.js";
 import { validateRequest } from "./middleware/validateRequest.js";
@@ -15,6 +16,7 @@ import { swaggerSpec } from "./swagger.js";
 import { createAuthRouter } from "./routes/auth/auth.routes.js";
 import { createUsersRouter } from "./routes/users/users.routes.js";
 import { createSparsRouter } from "./routes/spars/spars.routes.js";
+import { createNotificationsRouter } from "./routes/notifications/notifications.routes.js";
 
 export function createApp(config: AppConfig) {
   const app = express();
@@ -23,6 +25,7 @@ export function createApp(config: AppConfig) {
   // Initialize extensions
   initPool(config);
   initRedis(config);
+  initResend(config);
   initJwt(config.jwtAccessSecret, config.jwtRefreshSecret);
 
   // Core middleware
@@ -66,6 +69,7 @@ export function createApp(config: AppConfig) {
   app.use("/auth", createAuthRouter(config.isProd));
   app.use("/users", createUsersRouter(config.isProd));
   app.use("/spars", createSparsRouter(config.isProd));
+  app.use("/notifications", createNotificationsRouter(config.isProd));
 
   // Global error handler
   app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {

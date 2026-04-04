@@ -24,12 +24,25 @@ export interface SparMemberDetails {
   userId: string;
   fullName: string;
   username: string;
+  email: string;
   avatarURL: number | string;
   judgeLevel: string;
   debaterLevel: string;
   role: string;
   isHost: boolean;
   status: string;
+}
+
+export enum InviteResponse {
+  ACCEPTED = "ACCEPTED",
+  DECLINED = "DECLINED",
+  PENDING = "PENDING",
+}
+
+export interface InviteMember {
+  email: string | null;
+  username: string | null;
+  response: InviteResponse;
 }
 
 export interface SparWithMembers {
@@ -42,6 +55,7 @@ export interface SparWithMembers {
   expectedJudgeLevel: string | null;
   expectingJudge: boolean;
   motion: string | null;
+  inviteMembers: InviteMember[];
   meetLink: string | null;
   prepLinks: { team: string; link: string }[];
   members: SparMemberDetails[];

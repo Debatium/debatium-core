@@ -54,6 +54,40 @@ export async function getUserByEmail(
   };
 }
 
+export async function getUserById(
+  pool: DbClient,
+  userId: string
+): Promise<{ id: string; fullName: string; username: string; email: string } | null> {
+  const { rows } = await pool.query(
+    `SELECT id, full_name, username, email FROM users WHERE id = $1`,
+    [userId]
+  );
+  if (!rows[0]) return null;
+  return {
+    id: String(rows[0].id),
+    fullName: rows[0].full_name,
+    username: rows[0].username,
+    email: rows[0].email,
+  };
+}
+
+export async function getUserByUsername(
+  pool: DbClient,
+  username: string
+): Promise<{ id: string; fullName: string; username: string; email: string } | null> {
+  const { rows } = await pool.query(
+    `SELECT id, full_name, username, email FROM users WHERE username = $1`,
+    [username]
+  );
+  if (!rows[0]) return null;
+  return {
+    id: String(rows[0].id),
+    fullName: rows[0].full_name,
+    username: rows[0].username,
+    email: rows[0].email,
+  };
+}
+
 export async function getUserPasswordHash(
   pool: DbClient,
   userId: string
