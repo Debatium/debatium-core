@@ -3,7 +3,7 @@ import cookieParser from "cookie-parser";
 import swaggerUi from "swagger-ui-express";
 import type { Request, Response, NextFunction } from "express";
 
-import { type AppConfig } from "./config.js";
+import { getConfig, type AppConfig } from "./config.js";
 import { initPool } from "./extensions/db.js";
 import { initRedis } from "./extensions/redis.js";
 import { initResend } from "./extensions/resend.js";
@@ -84,3 +84,10 @@ export function createApp(config: AppConfig) {
 
   return { app, logger };
 }
+
+// Default instance for Vercel/Serverless deployment
+const config = getConfig();
+const { app, logger } = createApp(config);
+
+export { app, logger, config };
+export default app;
