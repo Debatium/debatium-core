@@ -7,7 +7,7 @@ import { type SparWithMembers, type InviteMember, InviteResponse } from "../../d
 import {
   createSpar, getAvailableSpars, getMyActiveSpars, getMyHistorySpars,
   getSparById, getSparMembers, insertSparMember, upsertSparMember,
-  removeSparMember, updateSparStatus, updateSparHost, updateInviteMemberResponse,
+  removeSparMember, updateSpar, updateSparStatus, updateSparHost, updateInviteMemberResponse,
 } from "../../db/spars/queries.js";
 import { getUserById, getUserByUsername, getUserByEmail } from "../../db/users/queries.js";
 import { sendSparInviteEmail } from "../../extensions/email.js";
@@ -169,6 +169,35 @@ export async function createSparService(
     }
 
     return createdSparId;
+  });
+}
+
+export async function updateSparService(userId: string, data: Record<string, unknown>): Promise<void> {
+  const sparId = data.sparId as string;
+  if (!sparId) throw new DomainValidationError("sparId is required");
+
+  const parsedTime = CustomDateTime.fromStr(data.time as string).value;
+  const oneHourFromNow = new Date(Date.now() + 60 * 60 * 1000);
+  if (parsedTime < oneHourFromNow) {
+    throw new DomainValidationError("Spar start time must be at least 1 hour from now");
+  }
+
+  await withTransaction(async (client) => {
+    const spar = await getSparById(client, sparId);
+    if (!spar) throw new DomainValidationError("Spar not found");
+    if (spar.status !== "created") throw new DomainValidationError("Can only edit spars in created status");
+
+    const members = await getSparMembers(client, sparId);
+    const host = members.find(m => String(m.user_id) === userId && m.is_host);
+    if (!host) throw new DomainValidationError("Only host can edit the spar");
+
+    await updateSpar(client, sparId, {
+      name: data.name as string,
+      motion: (data.motion as string) ?? null,
+      time: parsedTime,
+      expected_debater_level: data.expectedDebaterLevel as string,
+      expected_judge_level: (data.expectedJudgeLevel as string) ?? null,
+    });
   });
 }
 

@@ -569,6 +569,34 @@ const options: swaggerJsdoc.Options = {
             "200": { description: "List of spars", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/Spar" } } } } },
           },
         },
+        put: {
+          tags: ["Spars"],
+          summary: "Update spar (host only, status=created)",
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["sparId", "name", "time", "expectedDebaterLevel"],
+                  properties: {
+                    sparId: { type: "string" },
+                    name: { type: "string" },
+                    time: { type: "string", example: "10/04/2026 20:00", description: "DD/MM/YYYY HH:MM" },
+                    expectedDebaterLevel: { type: "string", enum: ["novice", "open", "pro"] },
+                    expectedJudgeLevel: { type: "string", enum: ["novice", "intermediate", "advanced", "expert"], nullable: true },
+                    motion: { type: "string", nullable: true },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "200": { description: "Spar updated", content: { "application/json": { schema: { type: "object", properties: { message: { type: "string" } } } } } },
+            "400": { description: "Validation error", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+          },
+        },
         delete: {
           tags: ["Spars"],
           summary: "Cancel spar (host only)",

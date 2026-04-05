@@ -197,6 +197,17 @@ export async function removeSparMember(pool: DbClient, sparId: string, userId: s
   await pool.query(`DELETE FROM spar_members WHERE spar_id = $1 AND user_id = $2`, [sparId, userId]);
 }
 
+export async function updateSpar(
+  pool: DbClient,
+  sparId: string,
+  data: { name: string; motion: string | null; time: Date; expected_debater_level: string; expected_judge_level: string | null }
+): Promise<void> {
+  await pool.query(
+    `UPDATE spars SET name = $1, motion = $2, time = $3, expected_debater_level = $4, expected_judge_level = $5 WHERE id = $6`,
+    [data.name, data.motion, data.time, data.expected_debater_level, data.expected_judge_level, sparId]
+  );
+}
+
 export async function updateSparStatus(pool: DbClient, sparId: string, status: string): Promise<void> {
   await pool.query(`UPDATE spars SET status = $1 WHERE id = $2`, [status, sparId]);
 }

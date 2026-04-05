@@ -4,7 +4,7 @@ import { validateJson } from "../../middleware/validateJson.js";
 import { ErrorCode, errorResponse } from "../../utils/errors.js";
 import { DomainValidationError } from "../../db/exceptions.js";
 import {
-  createSparService, listAvailableSparsService, listMyActiveSparsService,
+  createSparService, updateSparService, listAvailableSparsService, listMyActiveSparsService,
   listMyHistorySparsService, requestJoinSparService, inviteUserSparService,
   matchingRequestSparService, acceptRequestSparService, declineRequestSparService,
   leaveSparService, kickMemberSparService, cancelSparService, cancelMatchingSparService,
@@ -23,6 +23,7 @@ function classifyPgError(err: unknown, context?: string): { code: ErrorCode; mes
   const messages: Record<string, Record<string, string>> = {
     "23505": {
       create: "A spar with this name already exists. Please choose a unique name.",
+      update: "A spar with this name already exists.",
       request: "You have already requested to join or are already a member of this spar.",
       invite: "This user has already been invited or is already a member.",
       default: "A duplicate entry was detected.",
@@ -67,6 +68,22 @@ export function createSparsRouter(isProd: boolean): Router {
         res.status(201).json({ message: "Spar created successfully", sparId });
       } catch (err) {
         const pgInfo = classifyPgError(err, "create");
+        if (pgInfo) return errorResponse(res, pgInfo.status, pgInfo.code, pgInfo.message);
+        next(err);
+      }
+    }
+  );
+
+  // PUT /spars — Update spar (host only, status=created)
+  router.put(
+    "/",
+    requireAuth(isProd),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        await updateSparService(req.userId!, req.body);
+        res.status(200).json({ message: "Spar updated successfully" });
+      } catch (err) {
+        const pgInfo = classifyPgError(err, "update");
         if (pgInfo) return errorResponse(res, pgInfo.status, pgInfo.code, pgInfo.message);
         next(err);
       }
