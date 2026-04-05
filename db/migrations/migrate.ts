@@ -13,7 +13,7 @@ const DB_URL =
 const TEST_PASSWORD = "TestPassword123@";
 
 async function runMigrations() {
-  const migrationsDir = path.dirname(new URL(import.meta.url).pathname);
+  const migrationsDir = __dirname;
 
   const files = fs
     .readdirSync(migrationsDir)
