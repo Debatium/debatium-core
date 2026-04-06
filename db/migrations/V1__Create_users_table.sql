@@ -1,3 +1,5 @@
+SET timezone = 'Asia/Bangkok';
+
 -- 1. Create ENUMs for user levels
 CREATE TYPE debater_level_enum AS ENUM ('novice', 'open', 'pro');
 CREATE TYPE judge_level_enum AS ENUM ('novice', 'intermediate', 'advanced', 'expert');

@@ -1,3 +1,5 @@
+SET timezone = 'Asia/Bangkok';
+
 CREATE TYPE tournament_rule_enum AS ENUM ('bp', 'wsdc');
 CREATE TYPE entry_role_enum AS ENUM ('debater', 'independentAdjudicator', 'subsidizedAdjudicator', 'invitedAdjudicator');
 CREATE TYPE achievement_enum AS ENUM ('participant', 'octoFinalist', 'quarterFinalist', 'semiFinalist', 'finalist', 'champion', 'runnerUp');

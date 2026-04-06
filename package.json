@@ -7,7 +7,9 @@
     "dev": "tsx watch server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "migrate": "tsx db/migrations/migrate.ts"
+    "migrate": "tsx db/migrations/migrate.ts",
+    "test": "MODE=testing vitest run",
+    "test:watch": "MODE=testing vitest"
   },
   "dependencies": {
     "@upstash/redis": "^1.34.3",
@@ -30,9 +32,13 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.14.0",
     "@types/pg": "^8.11.11",
+    "@types/supertest": "^7.2.0",
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.8",
+    "@vitest/ui": "^4.1.2",
+    "supertest": "^7.2.2",
     "tsx": "^4.19.3",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.2"
   }
 }

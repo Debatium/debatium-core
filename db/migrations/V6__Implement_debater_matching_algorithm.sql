@@ -1,3 +1,5 @@
+SET timezone = 'Asia/Bangkok';
+
 -- 1. Helper Function for Debater Level Ranks
 CREATE OR REPLACE FUNCTION get_debater_level_rank(p_level debater_level_enum)
 RETURNS INT AS $$

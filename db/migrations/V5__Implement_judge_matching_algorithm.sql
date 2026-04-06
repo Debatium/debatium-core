@@ -1,3 +1,5 @@
+SET timezone = 'Asia/Bangkok';
+
 CREATE OR REPLACE FUNCTION get_judge_level_rank(p_level judge_level_enum)
 RETURNS INT AS $$
 BEGIN

@@ -1,3 +1,5 @@
+SET timezone = 'Asia/Bangkok';
+
 CREATE TYPE spar_status_enum AS ENUM ('created', 'matching', 'ready', 'debating', 'done', 'cancelled');
 CREATE TYPE spar_role_enum AS ENUM ('debater', 'judge', 'observer');
 CREATE TYPE request_status_enum AS ENUM ('pending', 'accepted', 'declined', 'invited');
@@ -11,7 +13,7 @@ CREATE TABLE IF NOT EXISTS meet_links (
 CREATE TABLE IF NOT EXISTS spars (
     id UUID PRIMARY KEY,
     name VARCHAR(200) NOT NULL UNIQUE,
-    time TIMESTAMP NOT NULL,
+    time TIMESTAMPTZ NOT NULL,
     rule tournament_rule_enum NOT NULL,
     status spar_status_enum NOT NULL DEFAULT 'created',
     expected_debater_level debater_level_enum NOT NULL,
@@ -21,7 +23,8 @@ CREATE TABLE IF NOT EXISTS spars (
     meet_link VARCHAR(200),
     judge_finding_priority INT NOT NULL DEFAULT 0,
     debater_finding_priority INT NOT NULL DEFAULT 0,
-    created_at TIMESTAMP DEFAULT NOW()
+    invite_members JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 ALTER TABLE meet_links
@@ -34,7 +37,7 @@ CREATE TABLE IF NOT EXISTS spar_members (
     role spar_role_enum NOT NULL,
     is_host BOOLEAN NOT NULL DEFAULT FALSE,
     status request_status_enum NOT NULL DEFAULT 'pending',
-    created_at TIMESTAMP DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
     PRIMARY KEY (spar_id, user_id)
 );
 
@@ -97,7 +100,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- 3. Main readiness evaluation function
-CREATE OR REPLACE FUNCTION evaluate_spar_readiness(p_spar_id UUID, p_now TIMESTAMP DEFAULT NOW())
+CREATE OR REPLACE FUNCTION evaluate_spar_readiness(p_spar_id UUID, p_now TIMESTAMPTZ DEFAULT NOW())
 RETURNS TABLE (success BOOLEAN, message TEXT) AS $$
 DECLARE
     v_spar RECORD;

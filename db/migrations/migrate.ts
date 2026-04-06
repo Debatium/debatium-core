@@ -12,17 +12,22 @@ const DB_URL =
 
 const TEST_PASSWORD = "TestPassword123@";
 
-async function runMigrations() {
+export async function runMigrations(customDbUrl?: string) {
   const migrationsDir = __dirname;
+  const dbUrl = customDbUrl || DB_URL;
 
   const files = fs
     .readdirSync(migrationsDir)
     .filter((f) => f.endsWith(".sql") && !f.endsWith("_down.sql"))
-    .sort();
+    .sort((a, b) => {
+      const versionA = parseInt(a.substring(1).split("__")[0], 10);
+      const versionB = parseInt(b.substring(1).split("__")[0], 10);
+      return versionA - versionB;
+    });
 
-  console.log(`Connecting to: ${DB_URL.replace(/:[^@]+@/, ":***@")}`);
+  console.log(`Connecting to: ${dbUrl.replace(/:[^@]+@/, ":***@")}`);
 
-  const pool = new pg.Pool({ connectionString: DB_URL });
+  const pool = new pg.Pool({ connectionString: dbUrl });
   const client = await pool.connect();
 
   try {
@@ -97,4 +102,6 @@ async function runMigrations() {
   }
 }
 
-runMigrations();
+if (process.argv[1] && process.argv[1].endsWith("migrate.ts")) {
+  runMigrations();
+}
