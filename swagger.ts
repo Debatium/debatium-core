@@ -99,7 +99,7 @@ const options: swaggerJsdoc.Options = {
             name: { type: "string" },
             time: { type: "string", example: "10/04/2026 20:00" },
             rule: { type: "string", enum: ["bp", "wsdc"] },
-            status: { type: "string", enum: ["created", "matching", "ready", "debating", "done", "cancelled"] },
+            status: { type: "string", enum: ["created", "matching", "ready", "debating", "evaluating", "done", "cancelled"] },
             expectedDebaterLevel: { type: "string", enum: ["novice", "open", "pro"] },
             expectedJudgeLevel: { type: "string", nullable: true },
             expectingJudge: { type: "boolean" },
