@@ -111,6 +111,26 @@ export function createUsersRouter(isProd: boolean): Router {
     }
   });
 
+  // POST /users/availability — Add availability from calendar response
+  router.post(
+    "/availability",
+    requireAuth(isProd),
+    validateJson([
+      "startDate", "endDate", "format", "roles",
+      "expectedJudgeLevel", "expectedDebaterLevel",
+    ]),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        await addUserAvailabilityService(req.userId!, req.body);
+        res.status(201).json({ success: { message: "Availability added successfully" } });
+      } catch (err) {
+        const pgInfo = classifyPgError(err);
+        if (pgInfo) return errorResponse(res, pgInfo.status, pgInfo.code, pgInfo.message);
+        next(err);
+      }
+    }
+  );
+
   // POST /users/calendar — Add availability
   router.post(
     "/calendar",
