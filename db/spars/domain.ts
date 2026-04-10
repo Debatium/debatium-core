@@ -3,6 +3,7 @@ export enum SparStatus {
   MATCHING = "matching",
   READY = "ready",
   DEBATING = "debating",
+  EVALUATING = "evaluating",
   DONE = "done",
   CANCELLED = "cancelled",
 }

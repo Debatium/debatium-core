@@ -7,13 +7,16 @@ export async function lazyManageSpars(pool: DbClient): Promise<void> {
   const now = new Date();
 
   // Release links for expired spars (time + 90 minutes)
-  const { rows: expired } = await pool.query(
-    `SELECT id FROM spars WHERE status IN ('ready','debating') AND time <= $1::timestamptz - INTERVAL '90 minutes'`,
-    [now]
-  );
-  for (const { id } of expired) {
-    await pool.query(`SELECT * FROM evaluate_spar_readiness($1, $2)`, [id, now]);
-  }
+  // const { rows: expired } = await pool.query(
+  //   `SELECT id FROM spars WHERE status IN ('ready','debating') AND time <= $1::timestamptz - INTERVAL '90 minutes'`,
+  //   [now]
+  // );
+  // for (const { id } of expired) {
+  //   await pool.query(`SELECT * FROM evaluate_spar_readiness($1, $2)`, [id, now]);
+  // }
+
+  // Trigger readiness check for created/matching spars entering the 15-minute window.
+  // ready → debating → evaluating → done are all host-controlled transitions.
 
   // Trigger evaluation for spars entering the 15-minute window
   const { rows: trigger } = await pool.query(
@@ -160,7 +163,7 @@ export async function getMyActiveSpars(pool: DbClient, userId: string): Promise<
   await lazyManageSpars(pool);
   const query = `${SPAR_SELECT}
     WHERE s.id IN (SELECT spar_id FROM spar_members WHERE user_id = $1 AND status IN ('pending','accepted','invited'))
-      AND s.status IN ('created','matching','ready','debating')
+      AND s.status IN ('created','matching','ready','debating','evaluating')
     ORDER BY s.time ASC`;
   return fetchSparsWithMembers(pool, query, [userId], userId);
 }
