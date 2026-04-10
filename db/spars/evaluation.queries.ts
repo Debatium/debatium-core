@@ -1,70 +1,60 @@
 import type pg from "pg";
-import type { SparBallot, SparFeedback } from "./evaluation.domain.js";
+import type { Evaluation, FeedbackEntry } from "./evaluation.domain.js";
 
 type DbClient = pg.Pool | pg.PoolClient;
 
-export async function insertBallot(
+export async function ensureEvaluation(
   pool: DbClient,
   sparId: string,
-  judgeId: string,
+  judgeId: string
+): Promise<Evaluation> {
+  const { rows } = await pool.query(
+    `INSERT INTO evaluations (spar_id, judge_id)
+     VALUES ($1, $2)
+     ON CONFLICT (spar_id, judge_id) DO NOTHING
+     RETURNING spar_id AS "sparId", judge_id AS "judgeId", status,
+               results_json AS "resultsJson", placements_json AS "placementsJson",
+               feedbacks_json AS "feedbacksJson", created_at AS "createdAt", updated_at AS "updatedAt"`,
+    [sparId, judgeId]
+  );
+  if (rows[0]) return rows[0];
+  return (await getEvaluationBySparId(pool, sparId))!;
+}
+
+export async function getEvaluationBySparId(pool: DbClient, sparId: string): Promise<Evaluation | null> {
+  const { rows } = await pool.query(
+    `SELECT spar_id AS "sparId", judge_id AS "judgeId", status,
+            results_json AS "resultsJson", placements_json AS "placementsJson",
+            feedbacks_json AS "feedbacksJson", created_at AS "createdAt", updated_at AS "updatedAt"
+     FROM evaluations WHERE spar_id = $1`,
+    [sparId]
+  );
+  return rows[0] || null;
+}
+
+export async function submitBallot(
+  pool: DbClient,
+  sparId: string,
   resultsJson: any,
   placementsJson: any
 ): Promise<void> {
   await pool.query(
-    `INSERT INTO spar_ballots (spar_id, judge_id, results_json, placements_json)
-     VALUES ($1, $2, $3, $4)`,
-    [sparId, judgeId, JSON.stringify(resultsJson), JSON.stringify(placementsJson)]
+    `UPDATE evaluations
+     SET results_json = $2, placements_json = $3, status = 'submitted', updated_at = NOW()
+     WHERE spar_id = $1`,
+    [sparId, JSON.stringify(resultsJson), JSON.stringify(placementsJson)]
   );
 }
 
-export async function insertFeedback(
+export async function appendFeedback(
   pool: DbClient,
   sparId: string,
-  debaterId: string,
-  rating: number,
-  comment: string | null,
-  isAnonymous: boolean
+  feedback: FeedbackEntry
 ): Promise<void> {
   await pool.query(
-    `INSERT INTO spar_feedbacks (spar_id, debater_id, rating, comment, is_anonymous)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [sparId, debaterId, rating, comment, isAnonymous]
+    `UPDATE evaluations
+     SET feedbacks_json = feedbacks_json || $2::jsonb, updated_at = NOW()
+     WHERE spar_id = $1`,
+    [sparId, JSON.stringify(feedback)]
   );
-}
-
-export async function getBallotBySparId(pool: DbClient, sparId: string): Promise<SparBallot | null> {
-  const { rows } = await pool.query(
-    `SELECT spar_id as "sparId", judge_id as "judgeId", results_json as "resultsJson",
-            placements_json as "placementsJson", created_at as "createdAt"
-     FROM spar_ballots WHERE spar_id = $1`,
-    [sparId]
-  );
-  return rows[0] || null;
-}
-
-export async function getFeedbacksBySparId(pool: DbClient, sparId: string): Promise<SparFeedback[]> {
-  const { rows } = await pool.query(
-    `SELECT f.spar_id as "sparId", f.debater_id as "debaterId", f.rating, f.comment,
-            f.is_anonymous as "isAnonymous", f.created_at as "createdAt",
-            u.username, u.avatar_url as "avatarURL"
-     FROM spar_feedbacks f
-     LEFT JOIN users u ON f.debater_id = u.id
-     WHERE f.spar_id = $1`,
-    [sparId]
-  );
-  return rows;
-}
-
-export async function getFeedbackByDebater(
-  pool: DbClient,
-  sparId: string,
-  debaterId: string
-): Promise<SparFeedback | null> {
-  const { rows } = await pool.query(
-    `SELECT spar_id as "sparId", debater_id as "debaterId", rating, comment,
-            is_anonymous as "isAnonymous", created_at as "createdAt"
-     FROM spar_feedbacks WHERE spar_id = $1 AND debater_id = $2`,
-    [sparId, debaterId]
-  );
-  return rows[0] || null;
 }

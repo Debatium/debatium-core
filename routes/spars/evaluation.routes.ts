@@ -11,7 +11,7 @@ import {
 export function createEvaluationRouter(isProd: boolean): Router {
   const router = Router();
 
-  // POST /spars/ballot — Submit ballot (Judge)
+  // POST /evaluations/ballot — Submit ballot (Judge)
   router.post(
     "/ballot",
     requireAuth(isProd),
@@ -25,7 +25,7 @@ export function createEvaluationRouter(isProd: boolean): Router {
     }
   );
 
-  // POST /spars/feedback — Submit feedback (Debater)
+  // POST /evaluations/feedback — Submit feedback (Debater)
   router.post(
     "/feedback",
     requireAuth(isProd),
@@ -39,9 +39,9 @@ export function createEvaluationRouter(isProd: boolean): Router {
     }
   );
 
-  // GET /spars/evaluation — Fetch evaluation data (Blind Reveal)
+  // GET /evaluations — Fetch evaluation data (Blind Reveal)
   router.get(
-    "/evaluation",
+    "/",
     requireAuth(isProd),
     async (req: Request, res: Response, next: NextFunction) => {
       try {

@@ -108,13 +108,13 @@ describe("Spar Evaluation Schema Validation", () => {
       };
 
       await request
-        .post("/spars/ballot")
+        .post("/evaluations/ballot")
         .set("Authorization", judge.authHeader.Authorization)
         .send(ballotPayload)
         .expect(200);
 
       const res = await request
-        .get(`/spars/evaluation?sparId=${sparId}`)
+        .get(`/evaluations?sparId=${sparId}`)
         .set("Authorization", host.authHeader.Authorization)
         .expect(200);
 
@@ -210,13 +210,13 @@ describe("Spar Evaluation Schema Validation", () => {
       };
 
       await request
-        .post("/spars/ballot")
+        .post("/evaluations/ballot")
         .set("Authorization", judge.authHeader.Authorization)
         .send(ballotPayload)
         .expect(200);
 
       const res = await request
-        .get(`/spars/evaluation?sparId=${sparId}`)
+        .get(`/evaluations?sparId=${sparId}`)
         .set("Authorization", debaters[0].authHeader.Authorization)
         .expect(200);
 
@@ -283,19 +283,19 @@ describe("Spar Evaluation Schema Validation", () => {
       };
 
       await request
-        .post("/spars/feedback")
+        .post("/evaluations/feedback")
         .set("Authorization", debater1.authHeader.Authorization)
         .send(fb1)
         .expect(200);
       await request
-        .post("/spars/feedback")
+        .post("/evaluations/feedback")
         .set("Authorization", debater2.authHeader.Authorization)
         .send(fb2)
         .expect(200);
 
       // Submit ballot to unlock feedback
       await request
-        .post("/spars/ballot")
+        .post("/evaluations/ballot")
         .set("Authorization", judge.authHeader.Authorization)
         .send({
           sparId,
@@ -321,7 +321,7 @@ describe("Spar Evaluation Schema Validation", () => {
         .expect(200);
 
       const res = await request
-        .get(`/spars/evaluation?sparId=${sparId}`)
+        .get(`/evaluations?sparId=${sparId}`)
         .set("Authorization", judge.authHeader.Authorization)
         .expect(200);
 

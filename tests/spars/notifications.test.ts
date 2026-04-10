@@ -9,7 +9,7 @@ describe('Spar Evaluation - Notifications', () => {
 
     // 1. Judge submits ballot
     await request
-      .post('/spars/ballot')
+      .post('/evaluations/ballot')
       .set('Authorization', judge.authHeader.Authorization)
       .send({
         sparId,
@@ -52,7 +52,7 @@ describe('Spar Evaluation - Notifications', () => {
 
     // 1. Debater submits feedback
     await request
-      .post('/spars/feedback')
+      .post('/evaluations/feedback')
       .set('Authorization', debater1.authHeader.Authorization)
       .send({ sparId, rating: 9, comment: 'Nice', isAnonymous: false })
       .expect(200);
@@ -75,7 +75,7 @@ describe('Spar Evaluation - Notifications', () => {
 
     // 1. Judge submits ballot first
     await request
-      .post('/spars/ballot')
+      .post('/evaluations/ballot')
       .set('Authorization', judge.authHeader.Authorization)
       .send({
         sparId,
@@ -88,7 +88,7 @@ describe('Spar Evaluation - Notifications', () => {
 
     // 2. Debater submits feedback
     await request
-      .post('/spars/feedback')
+      .post('/evaluations/feedback')
       .set('Authorization', debater1.authHeader.Authorization)
       .send({ sparId, rating: 9, comment: 'Great job', isAnonymous: false })
       .expect(200);

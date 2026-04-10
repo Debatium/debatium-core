@@ -25,7 +25,7 @@ describe('Spar Evaluation - Member Validation', () => {
     };
 
     const res = await request
-      .post('/spars/ballot')
+      .post('/evaluations/ballot')
       .set('Authorization', judge.authHeader.Authorization)
       .send(payload);
     expect(res.status).toBe(400);
@@ -53,7 +53,7 @@ describe('Spar Evaluation - Member Validation', () => {
     };
 
     const res = await request
-      .post('/spars/ballot')
+      .post('/evaluations/ballot')
       .set('Authorization', judge.authHeader.Authorization)
       .send(payload);
     expect(res.status).toBe(400);
@@ -93,7 +93,7 @@ describe('Spar Evaluation - Member Validation', () => {
     };
 
     const res = await request
-      .post('/spars/ballot')
+      .post('/evaluations/ballot')
       .set('Authorization', judge.authHeader.Authorization)
       .send(payload);
     expect(res.status).toBe(400);
@@ -120,7 +120,7 @@ describe('Spar Evaluation - Member Validation', () => {
     };
 
     const res = await request
-      .post('/spars/ballot')
+      .post('/evaluations/ballot')
       .set('Authorization', judge.authHeader.Authorization)
       .send(payload);
     expect(res.status).toBe(400);
@@ -147,7 +147,7 @@ describe('Spar Evaluation - Member Validation', () => {
     };
 
     const res = await request
-      .post('/spars/ballot')
+      .post('/evaluations/ballot')
       .set('Authorization', judge.authHeader.Authorization)
       .send(payload);
     expect(res.status).toBe(400);
@@ -167,7 +167,7 @@ describe('Spar Evaluation - Member Validation', () => {
       };
 
       const res = await request
-        .post('/spars/ballot')
+        .post('/evaluations/ballot')
         .set('Authorization', debater1.authHeader.Authorization)
         .send(payload);
       expect(res.status).toBe(403);
@@ -177,7 +177,7 @@ describe('Spar Evaluation - Member Validation', () => {
       const { sparId, judge } = await setupDoneSpar();
 
       const res = await request
-        .post('/spars/feedback')
+        .post('/evaluations/feedback')
         .set('Authorization', judge.authHeader.Authorization)
         .send({
           sparId,
@@ -205,7 +205,7 @@ describe('Spar Evaluation - Member Validation', () => {
         .expect(200);
 
       const res = await request
-        .get(`/spars/evaluation?sparId=${sparId}`)
+        .get(`/evaluations?sparId=${sparId}`)
         .set('Authorization', observer.authHeader.Authorization);
       expect(res.status).toBe(403);
     });
@@ -229,7 +229,7 @@ describe('Spar Evaluation - Member Validation', () => {
 
       // Attempt Ballot
       const ballotRes = await request
-        .post('/spars/ballot')
+        .post('/evaluations/ballot')
         .set('Authorization', observer.authHeader.Authorization)
         .send({
           sparId,
@@ -242,7 +242,7 @@ describe('Spar Evaluation - Member Validation', () => {
 
       // Attempt Feedback
       const feedbackRes = await request
-        .post('/spars/feedback')
+        .post('/evaluations/feedback')
         .set('Authorization', observer.authHeader.Authorization)
         .send({ sparId, rating: 5, comment: 'I am just watching', isAnonymous: true });
       expect(feedbackRes.status).toBe(403);

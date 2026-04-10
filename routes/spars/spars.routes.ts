@@ -9,7 +9,6 @@ import {
   matchingRequestSparService, acceptRequestSparService, declineRequestSparService,
   leaveSparService, kickMemberSparService, cancelSparService, cancelMatchingSparService,
 } from "./spars.services.js";
-import { createEvaluationRouter } from "./evaluation.routes.js";
 
 function classifyPgError(err: unknown, context?: string): { code: ErrorCode; message: string; status: number } | null {
   const pgErr = err as { code?: string; message?: string };
@@ -285,9 +284,6 @@ export function createSparsRouter(isProd: boolean): Router {
       }
     }
   );
-
-  // Mount evaluation routes (ballot, feedback)
-  router.use("/", createEvaluationRouter(isProd));
 
   // Error handler (should be last)
   router.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {

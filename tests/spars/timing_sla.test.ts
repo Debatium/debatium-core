@@ -11,14 +11,14 @@ describe('Spar Evaluation - Timing and SLA', () => {
     await pool.query(`UPDATE spars SET time = $1 WHERE id = $2`, [nearPastTime, sparId]);
 
     const res = await request
-      .get(`/spars/evaluation?sparId=${sparId}`)
+      .get(`/evaluations?sparId=${sparId}`)
       .set('Authorization', debater1.authHeader.Authorization);
     
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('pending');
 
     const ballotRes = await request
-      .post('/spars/ballot')
+      .post('/evaluations/ballot')
       .set('Authorization', judge.authHeader.Authorization)
       .send({ sparId, teams: { Proposition: [], Opposition: [] } });
     expect(ballotRes.status).toBe(400);
@@ -30,7 +30,7 @@ describe('Spar Evaluation - Timing and SLA', () => {
     await pool.query(`UPDATE spars SET status = 'debating' WHERE id = $1`, [sparId]);
 
     const res = await request
-      .get(`/spars/evaluation?sparId=${sparId}`)
+      .get(`/evaluations?sparId=${sparId}`)
       .set('Authorization', debater1.authHeader.Authorization);
     
     expect(res.status).toBe(200);
@@ -45,14 +45,14 @@ describe('Spar Evaluation - Timing and SLA', () => {
     await pool.query(`UPDATE spars SET time = $1 WHERE id = $2`, [wayPastTime, sparId]);
 
     const res = await request
-      .get(`/spars/evaluation?sparId=${sparId}`)
+      .get(`/evaluations?sparId=${sparId}`)
       .set('Authorization', debater1.authHeader.Authorization);
     
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('draw');
 
     const ballotRes = await request
-      .post('/spars/ballot')
+      .post('/evaluations/ballot')
       .set('Authorization', judge.authHeader.Authorization)
       .send({ sparId, teams: { Proposition: [], Opposition: [] } });
     expect(ballotRes.status).toBe(400);
@@ -66,7 +66,7 @@ describe('Spar Evaluation - Timing and SLA', () => {
     await pool.query(`UPDATE spars SET time = $1 WHERE id = $2`, [wayPastTime, sparId]);
 
     const res = await request
-      .post('/spars/feedback')
+      .post('/evaluations/feedback')
       .set('Authorization', debater1.authHeader.Authorization)
       .send({ sparId, rating: 8, comment: 'Too late', isAnonymous: false });
     
@@ -78,14 +78,14 @@ describe('Spar Evaluation - Timing and SLA', () => {
     
     // 1. Debater submits feedback
     await request
-      .post('/spars/feedback')
+      .post('/evaluations/feedback')
       .set('Authorization', debater1.authHeader.Authorization)
       .send({ sparId, rating: 9, comment: 'Nice', isAnonymous: false })
       .expect(200);
 
     // 2. Judge checks status -> pending (no feedbacks)
     const res = await request
-      .get(`/spars/evaluation?sparId=${sparId}`)
+      .get(`/evaluations?sparId=${sparId}`)
       .set('Authorization', judge.authHeader.Authorization);
     
     expect(res.status).toBe(200);
@@ -100,7 +100,7 @@ describe('Spar Evaluation - Timing and SLA', () => {
 
     // 1. Debater submits feedback
     await request
-      .post('/spars/feedback')
+      .post('/evaluations/feedback')
       .set('Authorization', debater1.authHeader.Authorization)
       .send({ sparId, rating: 9, comment: 'Nice', isAnonymous: false })
       .expect(200);
@@ -111,7 +111,7 @@ describe('Spar Evaluation - Timing and SLA', () => {
 
     // 3. Judge checks status -> complete (unlocks feedback even without ballot)
     const res = await request
-      .get(`/spars/evaluation?sparId=${sparId}`)
+      .get(`/evaluations?sparId=${sparId}`)
       .set('Authorization', judge.authHeader.Authorization);
     
     expect(res.status).toBe(200);

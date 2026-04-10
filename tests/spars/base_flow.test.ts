@@ -7,7 +7,7 @@ describe('Spar Evaluation - Base Flow', () => {
     const { sparId } = await setupDoneSpar();
     const stranger = await createAuthenticatedUser();
     const res = await request
-      .get(`/spars/evaluation?sparId=${sparId}`)
+      .get(`/evaluations?sparId=${sparId}`)
       .set('Authorization', stranger.authHeader.Authorization);
     
     expect(res.status).toBe(403); 
@@ -16,7 +16,7 @@ describe('Spar Evaluation - Base Flow', () => {
   it('should show "pending" for debaters initially (waiting for judge)', async () => {
     const { sparId, debater1 } = await setupDoneSpar();
     const res = await request
-      .get(`/spars/evaluation?sparId=${sparId}`)
+      .get(`/evaluations?sparId=${sparId}`)
       .set('Authorization', debater1.authHeader.Authorization);
     
     expect(res.status).toBe(200);
@@ -30,21 +30,21 @@ describe('Spar Evaluation - Base Flow', () => {
 
     // 1. Debater 1 submits feedback
     await request
-      .post('/spars/feedback')
+      .post('/evaluations/feedback')
       .set('Authorization', debater1.authHeader.Authorization)
       .send({ sparId, rating: 9, comment: 'Nice', isAnonymous: false })
       .expect(200);
 
     // 2. Debater 1 checks status -> pending (waiting for judge)
     const check1 = await request
-      .get(`/spars/evaluation?sparId=${sparId}`)
+      .get(`/evaluations?sparId=${sparId}`)
       .set('Authorization', debater1.authHeader.Authorization);
     expect(check1.body.status).toBe('pending');
     expect(check1.body.feedbackSubmitted).toBe(true);
 
     // 3. Judge submits ballot
     await request
-      .post('/spars/ballot')
+      .post('/evaluations/ballot')
       .set('Authorization', judge.authHeader.Authorization)
       .send({
         sparId,
@@ -65,7 +65,7 @@ describe('Spar Evaluation - Base Flow', () => {
 
     // 4. Debater 1 checks status -> complete
     const check2 = await request
-      .get(`/spars/evaluation?sparId=${sparId}`)
+      .get(`/evaluations?sparId=${sparId}`)
       .set('Authorization', debater1.authHeader.Authorization);
     expect(check2.body.status).toBe('complete');
     expect(check2.body.ballot).toBeDefined();
@@ -73,7 +73,7 @@ describe('Spar Evaluation - Base Flow', () => {
 
     // 5. Debater 2 checks status -> complete
     const check3 = await request
-      .get(`/spars/evaluation?sparId=${sparId}`)
+      .get(`/evaluations?sparId=${sparId}`)
       .set('Authorization', debater2.authHeader.Authorization);
     expect(check3.body.status).toBe('complete');
     expect(check3.body.ballot).toBeDefined();
@@ -81,7 +81,7 @@ describe('Spar Evaluation - Base Flow', () => {
 
     // 6. Judge checks status -> complete (reveals feedbacks)
     const check4 = await request
-      .get(`/spars/evaluation?sparId=${sparId}`)
+      .get(`/evaluations?sparId=${sparId}`)
       .set('Authorization', judge.authHeader.Authorization);
     expect(check4.body.status).toBe('complete');
     expect(check4.body.feedbacks.length).toBeGreaterThan(0);

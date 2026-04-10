@@ -9,7 +9,7 @@ describe('Spar Evaluation - Ballot Validation', () => {
     const [d3, d4, d5] = extras;
     
     const res = await request
-      .post('/spars/ballot')
+      .post('/evaluations/ballot')
       .set('Authorization', judge.authHeader.Authorization)
       .send({
         sparId,
@@ -50,7 +50,7 @@ describe('Spar Evaluation - Ballot Validation', () => {
     };
 
     const res = await request
-      .post('/spars/ballot')
+      .post('/evaluations/ballot')
       .set('Authorization', judge.authHeader.Authorization)
       .send(payload);
     expect(res.status).toBe(400);
@@ -73,7 +73,7 @@ describe('Spar Evaluation - Ballot Validation', () => {
     };
 
     const res = await request
-      .post('/spars/ballot')
+      .post('/evaluations/ballot')
       .set('Authorization', judge.authHeader.Authorization)
       .send(payload);
     expect(res.status).toBe(400);
@@ -92,7 +92,7 @@ describe('Spar Evaluation - Ballot Validation', () => {
     };
 
     const res = await request
-      .post('/spars/ballot')
+      .post('/evaluations/ballot')
       .set('Authorization', judge.authHeader.Authorization)
       .send(payload);
     expect(res.status).toBe(400);
@@ -103,7 +103,7 @@ describe('Spar Evaluation - Ballot Validation', () => {
     const [d3, d4, d5] = extras;
 
     await request
-      .post('/spars/ballot')
+      .post('/evaluations/ballot')
       .set('Authorization', judge.authHeader.Authorization)
       .send({
         sparId,
@@ -115,7 +115,7 @@ describe('Spar Evaluation - Ballot Validation', () => {
       .expect(200);
 
     const res = await request
-      .get(`/spars/evaluation?sparId=${sparId}`)
+      .get(`/evaluations?sparId=${sparId}`)
       .set('Authorization', debater1.authHeader.Authorization)
       .expect(200);
     
@@ -137,7 +137,7 @@ describe('Spar Evaluation - Ballot Validation', () => {
     };
 
     const res = await request
-      .post('/spars/ballot')
+      .post('/evaluations/ballot')
       .set('Authorization', judge.authHeader.Authorization)
       .send(bpPayload);
     expect(res.status).toBe(400); 
@@ -149,7 +149,7 @@ describe('Spar Evaluation - Ballot Validation', () => {
 
     // WSDC requires 3 speakers per team
     const res = await request
-      .post('/spars/ballot')
+      .post('/evaluations/ballot')
       .set('Authorization', judge.authHeader.Authorization)
       .send({
         sparId,
@@ -175,14 +175,14 @@ describe('Spar Evaluation - Ballot Validation', () => {
 
     // First submission
     await request
-      .post('/spars/ballot')
+      .post('/evaluations/ballot')
       .set('Authorization', judge.authHeader.Authorization)
       .send(payload)
       .expect(200);
 
     // Second submission
     const res = await request
-      .post('/spars/ballot')
+      .post('/evaluations/ballot')
       .set('Authorization', judge.authHeader.Authorization)
       .send(payload);
     expect(res.status).toBe(400);

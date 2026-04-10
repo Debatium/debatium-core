@@ -60,7 +60,7 @@ export async function setupDoneSpar() {
 
   // 4. Trigger evaluation API - should work now at 31 mins
   await request
-    .get(`/spars/evaluation?sparId=${sparId}`)
+    .get(`/evaluations?sparId=${sparId}`)
     .set('Authorization', debater1.authHeader.Authorization)
     .expect(200);
   

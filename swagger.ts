@@ -1458,7 +1458,7 @@ const options: swaggerJsdoc.Options = {
           },
         },
       },
-      "/spars/ballot": {
+      "/evaluations/ballot": {
         post: {
           tags: ["Spars/Evaluation"],
           summary: "Submit spar ballot (Judge only)",
@@ -1658,7 +1658,7 @@ const options: swaggerJsdoc.Options = {
           },
         },
       },
-      "/spars/feedback": {
+      "/evaluations/feedback": {
         post: {
           tags: ["Spars/Evaluation"],
           summary: "Submit judge feedback (Debater only)",
@@ -1786,7 +1786,7 @@ const options: swaggerJsdoc.Options = {
           },
         },
       },
-      "/spars/evaluation": {
+      "/evaluations": {
         get: {
           tags: ["Spars/Evaluation"],
           summary: "Fetch evaluation data (Blind Reveal)",

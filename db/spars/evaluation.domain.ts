@@ -117,22 +117,23 @@ export class FeedbackPayload {
   }
 }
 
-export interface SparBallot {
-  sparId: string;
-  judgeId: string | null;
-  resultsJson: any;
-  placementsJson: any;
-  createdAt: Date;
-}
+export type EvaluationStatus = "pending" | "submitted";
 
-export interface SparFeedback {
-  sparId: string;
-  debaterId: string | null;
+export interface FeedbackEntry {
+  debaterId: string;
   rating: number;
   comment: string | null;
   isAnonymous: boolean;
+  createdAt: string;
+}
+
+export interface Evaluation {
+  sparId: string;
+  judgeId: string;
+  status: EvaluationStatus;
+  resultsJson: any | null;
+  placementsJson: any | null;
+  feedbacksJson: FeedbackEntry[];
   createdAt: Date;
-  // Included on fetch
-  username?: string;
-  avatarURL?: string;
+  updatedAt: Date;
 }

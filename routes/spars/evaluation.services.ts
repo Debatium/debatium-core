@@ -4,12 +4,12 @@ import { DomainValidationError, PermissionDeniedError } from "../../db/exception
 import { TournamentRule } from "../../db/tournaments/domain.js";
 import { getSparById, getSparMembers } from "../../db/spars/queries.js";
 import { BallotPayload, FeedbackPayload } from "../../db/spars/evaluation.domain.js";
+import type { FeedbackEntry } from "../../db/spars/evaluation.domain.js";
 import {
-  insertBallot,
-  insertFeedback,
-  getBallotBySparId,
-  getFeedbacksBySparId,
-  getFeedbackByDebater,
+  ensureEvaluation,
+  getEvaluationBySparId,
+  submitBallot,
+  appendFeedback,
 } from "../../db/spars/evaluation.queries.js";
 import { createNotification } from "../notifications/notifications.services.js";
 import { NotificationChannel, NotificationEventType } from "../../db/notifications/domain.js";
@@ -36,6 +36,11 @@ function getEvaluationWindow(startTime: any) {
   return { sparTime, canEvaluateAt, windowEnd };
 }
 
+function getJudgeId(members: any[]): string | null {
+  const judge = members.find(m => m.role === "judge" && m.status === "accepted");
+  return judge ? String(judge.user_id) : null;
+}
+
 export async function submitBallotService(userId: string, data: any): Promise<void> {
   const { sparId, teams, replySpeeches } = data;
   if (!sparId) throw new DomainValidationError("sparId is required");
@@ -44,39 +49,38 @@ export async function submitBallotService(userId: string, data: any): Promise<vo
     const spar = await getSparById(client, sparId);
     if (!spar) throw new DomainValidationError("Spar not found");
 
-    // 1-6. Status and Window Guards
     const { canEvaluateAt, windowEnd } = getEvaluationWindow(spar.time);
     const now = Date.now();
 
     if (spar.status === "cancelled") throw new DomainValidationError("Spar is cancelled, evaluation is not available.");
     if (!spar.expecting_judge) throw new DomainValidationError("This spar does not have a judge.");
-    
+
     if (now < canEvaluateAt.getTime()) {
       throw new DomainValidationError("Evaluation is only available 30 minutes after the spar start time.");
     }
     if (now > windowEnd.getTime()) {
       throw new DomainValidationError("The 48-hour evaluation window has closed.");
     }
-    // We no longer strictly require status 'done', as evaluation is time-based.
 
-    // 7. Verify judge membership
     const members = await getSparMembers(client, sparId);
     const isJudge = members.some(m => String(m.user_id) === userId && m.role === "judge" && m.status === "accepted");
     if (!isJudge) throw new PermissionDeniedError("Only the accepted judge can submit a ballot.");
 
-    // 8. Check if ballot exists
-    const existingBallot = await getBallotBySparId(client, sparId);
-    if (existingBallot) throw new DomainValidationError("Ballot already submitted. Submissions are final.");
+    // Ensure evaluation row exists
+    const evaluation = await ensureEvaluation(client, sparId, userId);
+    if (evaluation.status === "submitted") {
+      throw new DomainValidationError("Ballot already submitted. Submissions are final.");
+    }
 
-    // 9. Domain Validation
+    // Domain Validation
     const format = spar.rule as TournamentRule;
     const payload = new BallotPayload(sparId, format, teams, replySpeeches);
 
-    // 10. Bidirectional member validation
+    // Bidirectional member validation
     const acceptedDebaters = members.filter(m => m.role === "debater" && m.status === "accepted");
     const debaterIds = new Set(acceptedDebaters.map(m => String(m.user_id)));
     const payloadUserIds = Object.values(teams).flat().map((s: any) => String(s.userId));
-    
+
     if (payloadUserIds.length !== debaterIds.size) {
       throw new DomainValidationError("Ballot speakers do not match spar members count.");
     }
@@ -84,13 +88,13 @@ export async function submitBallotService(userId: string, data: any): Promise<vo
       if (!debaterIds.has(pid)) throw new DomainValidationError(`User ${pid} is not an accepted debater in this spar.`);
     }
 
-    // 12. Compute Placements
+    // Compute Placements
     const placements = computePlacements(format, teams, replySpeeches);
-    
-    // 13. Persistence
-    await insertBallot(client, sparId, userId, { teams, replySpeeches: replySpeeches || null }, placements);
 
-    // 14. Notifications
+    // Persistence — update the evaluation row
+    await submitBallot(client, sparId, { teams, replySpeeches: replySpeeches || null }, placements);
+
+    // Notifications
     for (const debater of acceptedDebaters) {
       await createNotification(client, {
         customerId: String(debater.user_id),
@@ -117,7 +121,7 @@ export async function submitFeedbackService(userId: string, data: any): Promise<
 
     if (spar.status === "cancelled") throw new DomainValidationError("Spar is cancelled.");
     if (!spar.expecting_judge) throw new DomainValidationError("This spar does not have a judge.");
-    
+
     if (now < canEvaluateAt.getTime()) {
       throw new DomainValidationError("Feedback is only available 30 minutes after the spar start time.");
     }
@@ -125,35 +129,44 @@ export async function submitFeedbackService(userId: string, data: any): Promise<
       throw new DomainValidationError("The 48-hour evaluation window has closed.");
     }
 
-    // Verify debater membership
     const members = await getSparMembers(client, sparId);
     const isDebater = members.some(m => String(m.user_id) === userId && m.role === "debater" && m.status === "accepted");
     if (!isDebater) throw new PermissionDeniedError("Only accepted debaters can submit feedback.");
 
-    // Check existing
-    const existing = await getFeedbackByDebater(client, sparId, userId);
-    if (existing) throw new DomainValidationError("Feedback already submitted. Submissions are final.");
+    // Ensure evaluation row exists
+    const judgeId = getJudgeId(members);
+    if (!judgeId) throw new DomainValidationError("No accepted judge found for this spar.");
+    const evaluation = await ensureEvaluation(client, sparId, judgeId);
+
+    // Check if this debater already submitted feedback
+    const alreadySubmitted = evaluation.feedbacksJson.some(
+      (f: FeedbackEntry) => f.debaterId === userId
+    );
+    if (alreadySubmitted) throw new DomainValidationError("Feedback already submitted. Submissions are final.");
 
     // Domain validation
     new FeedbackPayload(sparId, rating, comment, isAnonymous);
 
-    // Persistence
-    await insertFeedback(client, sparId, userId, rating, comment ?? null, isAnonymous);
+    // Append feedback to JSON array
+    const feedbackEntry: FeedbackEntry = {
+      debaterId: userId,
+      rating,
+      comment: comment ?? null,
+      isAnonymous,
+      createdAt: new Date().toISOString(),
+    };
+    await appendFeedback(client, sparId, feedbackEntry);
 
-    // Notify judge ONLY if ballot exists
-    const ballot = await getBallotBySparId(client, sparId);
-    if (ballot) {
-      const judge = members.find(m => m.role === "judge" && m.status === "accepted");
-      if (judge) {
-        await createNotification(client, {
-          customerId: String(judge.user_id),
-          eventType: NotificationEventType.FEEDBACK_SUBMITTED,
-          channel: NotificationChannel.IN_APP,
-          referenceId: sparId,
-          referenceType: "spar_room",
-          payload: { sparName: spar.name },
-        });
-      }
+    // Notify judge ONLY if ballot is submitted
+    if (evaluation.status === "submitted") {
+      await createNotification(client, {
+        customerId: judgeId,
+        eventType: NotificationEventType.FEEDBACK_SUBMITTED,
+        channel: NotificationChannel.IN_APP,
+        referenceId: sparId,
+        referenceType: "spar_room",
+        payload: { sparName: spar.name },
+      });
     }
   });
 }
@@ -168,7 +181,7 @@ export async function getEvaluationDataService(userId: string, sparId: string): 
   const members = await getSparMembers(pool, sparId);
   const member = members.find(m => String(m.user_id) === userId && m.status === "accepted");
   if (!member) throw new PermissionDeniedError("You are not an accepted member of this spar.");
-  
+
   const role = member.role;
   if (role === "observer") throw new PermissionDeniedError("Observers cannot access evaluation data.");
 
@@ -177,15 +190,24 @@ export async function getEvaluationDataService(userId: string, sparId: string): 
   const isWindowExpired = now > windowEnd.getTime();
   const isTooEarly = now < canEvaluateAt.getTime();
 
-  if (role === "debater") {
-    const ballot = await getBallotBySparId(pool, sparId);
-    const feedback = await getFeedbackByDebater(pool, sparId, userId);
+  const evaluation = await getEvaluationBySparId(pool, sparId);
 
-    if (ballot) {
-      return { 
-        status: "complete", 
-        ballot,
-        feedbackSubmitted: !!feedback
+  if (role === "debater") {
+    const feedbackSubmitted = evaluation
+      ? evaluation.feedbacksJson.some((f: FeedbackEntry) => f.debaterId === userId)
+      : false;
+
+    if (evaluation?.status === "submitted") {
+      return {
+        status: "complete",
+        ballot: {
+          sparId: evaluation.sparId,
+          judgeId: evaluation.judgeId,
+          resultsJson: evaluation.resultsJson,
+          placementsJson: evaluation.placementsJson,
+          createdAt: evaluation.updatedAt,
+        },
+        feedbackSubmitted,
       };
     }
 
@@ -194,32 +216,31 @@ export async function getEvaluationDataService(userId: string, sparId: string): 
     }
 
     if (isTooEarly) {
-      return { 
-        status: "pending", 
+      return {
+        status: "pending",
         message: "Evaluation will be available 30 minutes after the spar start time.",
-        feedbackSubmitted: !!feedback
+        feedbackSubmitted,
       };
     }
 
-    return { 
-      status: "pending", 
+    return {
+      status: "pending",
       message: "Waiting for the judge to submit the ballot.",
-      feedbackSubmitted: !!feedback
+      feedbackSubmitted,
     };
   }
 
   if (role === "judge") {
-    const ballot = await getBallotBySparId(pool, sparId);
-    if (!ballot) {
+    if (!evaluation || evaluation.status !== "submitted") {
       if (isTooEarly) return { status: "pending", message: "Evaluation will be available 30 minutes after the spar start time." };
       if (!isWindowExpired) return { status: "pending", message: "Submit your ballot to unlock debater feedback." };
     }
 
-    const feedbacks = await getFeedbacksBySparId(pool, sparId);
-    const sanitizedFeedbacks = feedbacks.map(f => {
+    const feedbacks = evaluation?.feedbacksJson ?? [];
+    const sanitizedFeedbacks = feedbacks.map((f: FeedbackEntry) => {
       const rating = typeof f.rating === "string" ? parseFloat(f.rating) : f.rating;
       if (f.isAnonymous) {
-        return { sparId: f.sparId, rating, comment: f.comment, isAnonymous: true, createdAt: f.createdAt };
+        return { sparId, rating, comment: f.comment, isAnonymous: true, createdAt: f.createdAt };
       }
       return { ...f, rating };
     });
