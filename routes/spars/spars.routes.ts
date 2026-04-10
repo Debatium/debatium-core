@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import { requireAuth } from "../../middleware/requireAuth.js";
 import { validateJson } from "../../middleware/validateJson.js";
 import { ErrorCode, errorResponse } from "../../utils/errors.js";
-import { DomainValidationError } from "../../db/exceptions.js";
+import { DomainValidationError, PermissionDeniedError } from "../../db/exceptions.js";
 import {
   createSparService, updateSparService, listAvailableSparsService, listMyActiveSparsService,
   listMyHistorySparsService, requestJoinSparService, inviteUserSparService,
@@ -285,8 +285,11 @@ export function createSparsRouter(isProd: boolean): Router {
     }
   );
 
-  // Error handler
+  // Error handler (should be last)
   router.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+    if (err instanceof PermissionDeniedError || err.name === "PermissionDeniedError") {
+      return errorResponse(res, 403, ErrorCode.UNAUTHORIZED, err.message);
+    }
     if (err instanceof DomainValidationError || err.name === "DomainValidationError") {
       return errorResponse(res, 400, ErrorCode.INVALID_FIELD_VALUE, err.message);
     }

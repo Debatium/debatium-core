@@ -16,6 +16,7 @@ import { swaggerSpec } from "./swagger.js";
 import { createAuthRouter } from "./routes/auth/auth.routes.js";
 import { createUsersRouter } from "./routes/users/users.routes.js";
 import { createSparsRouter } from "./routes/spars/spars.routes.js";
+import { createEvaluationRouter } from "./routes/spars/evaluation.routes.js";
 import { createNotificationsRouter } from "./routes/notifications/notifications.routes.js";
 
 export function createApp(config: AppConfig) {
@@ -69,6 +70,7 @@ export function createApp(config: AppConfig) {
   app.use("/auth", createAuthRouter(config.isProd));
   app.use("/users", createUsersRouter(config.isProd));
   app.use("/spars", createSparsRouter(config.isProd));
+  app.use("/evaluations", createEvaluationRouter(config.isProd));
   app.use("/notifications", createNotificationsRouter(config.isProd));
 
   // Global error handler
