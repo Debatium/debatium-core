@@ -160,7 +160,7 @@ export async function getMyActiveSpars(pool: DbClient, userId: string): Promise<
   await lazyManageSpars(pool);
   const query = `${SPAR_SELECT}
     WHERE s.id IN (SELECT spar_id FROM spar_members WHERE user_id = $1 AND status IN ('pending','accepted','invited'))
-      AND s.status IN ('created','matching','ready','debating')
+      AND s.status IN ('created','matching','ready','debating','evaluating')
     ORDER BY s.time ASC`;
   return fetchSparsWithMembers(pool, query, [userId], userId);
 }
