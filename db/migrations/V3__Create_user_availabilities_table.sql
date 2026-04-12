@@ -1,11 +1,13 @@
+SET timezone = 'Asia/Bangkok';
+
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 
 CREATE TABLE user_availabilities (
     id UUID PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name VARCHAR(200) NOT NULL,
-    start_time TIMESTAMP NOT NULL,
-    end_time TIMESTAMP NOT NULL,
+    start_time TIMESTAMPTZ NOT NULL,
+    end_time TIMESTAMPTZ NOT NULL,
     format tournament_rule_enum NOT NULL,
     expected_judge_level judge_level_enum,
     expected_debater_level debater_level_enum,
@@ -13,7 +15,7 @@ CREATE TABLE user_availabilities (
 
     CONSTRAINT no_overlapping_availabilities EXCLUDE USING gist (
         user_id WITH =,
-        tsrange(start_time, end_time) WITH &&
+        tstzrange(start_time, end_time) WITH &&
     )
 );
 

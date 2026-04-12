@@ -232,9 +232,6 @@ export async function requestJoinSparService(userId: string, data: Record<string
   await withTransaction(async (client) => {
     const spar = await getSparById(client, sparId);
     if (!spar) throw new DomainValidationError("Spar not found");
-    if (spar.status === "debating" && role !== "observer") {
-      throw new DomainValidationError("Can only join as observer during debate");
-    }
 
     const members = await getSparMembers(client, sparId);
     if (members.some(m => String(m.user_id) === userId)) {
