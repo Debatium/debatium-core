@@ -10,6 +10,7 @@ import {
   removeSparMember, updateSpar, updateSparStatus, updateSparHost, updateInviteMemberResponse,
 } from "../../db/spars/queries.js";
 import { getUserById, getUserByUsername, getUserByEmail } from "../../db/users/queries.js";
+import { getEvaluationBySparId } from "../../db/spars/evaluation.queries.js";
 import { sendSparInviteEmail } from "../../extensions/email.js";
 import { NotificationEventType } from "../../db/notifications/domain.js";
 import { createNotification, notifyInAppAndEmail } from "../notifications/notifications.services.js";
@@ -607,6 +608,64 @@ export async function cancelSparService(userId: string, data: Record<string, unk
         } : undefined,
       });
     }
+  });
+}
+
+export async function startDebateSparService(userId: string, data: Record<string, unknown>): Promise<void> {
+  const sparId = data.sparId as string;
+  if (!sparId) throw new DomainValidationError("sparId is required");
+
+  const pool = getPool();
+  const spar = await getSparById(pool, sparId);
+  if (!spar) throw new DomainValidationError("Spar not found");
+  if (spar.status !== "ready") throw new DomainValidationError("Debate can only be started once the spar is ready.");
+
+  const members = await getSparMembers(pool, sparId);
+  const host = members.find(m => String(m.user_id) === userId && m.is_host);
+  if (!host) throw new DomainValidationError("Only the host can start the debate.");
+
+  await updateSparStatus(pool, sparId, "debating");
+}
+
+export async function startEvaluationSparService(userId: string, data: Record<string, unknown>): Promise<void> {
+  const sparId = data.sparId as string;
+  if (!sparId) throw new DomainValidationError("sparId is required");
+
+  const pool = getPool();
+  const spar = await getSparById(pool, sparId);
+  if (!spar) throw new DomainValidationError("Spar not found");
+  if (spar.status !== "debating") throw new DomainValidationError("Evaluation can only be started after the debate has begun.");
+  if (!spar.expecting_judge) throw new DomainValidationError("This spar does not have a judge, so evaluation is not applicable.");
+
+  const members = await getSparMembers(pool, sparId);
+  const host = members.find(m => String(m.user_id) === userId && m.is_host);
+  if (!host) throw new DomainValidationError("Only the host can start the evaluation phase.");
+
+  const evaluation = await getEvaluationBySparId(pool, sparId);
+  if (evaluation?.status === "submitted") throw new DomainValidationError("Evaluation has already been completed for this spar.");
+
+  await updateSparStatus(pool, sparId, "evaluating");
+}
+
+export async function completeSparService(userId: string, data: Record<string, unknown>): Promise<void> {
+  const sparId = data.sparId as string;
+  if (!sparId) throw new DomainValidationError("sparId is required");
+
+  await withTransaction(async (client) => {
+    const spar = await getSparById(client, sparId);
+    if (!spar) throw new DomainValidationError("Spar not found");
+    if (spar.status !== "evaluating") throw new DomainValidationError("Spar must be in the evaluating phase to be completed.");
+
+    const members = await getSparMembers(client, sparId);
+    const host = members.find(m => String(m.user_id) === userId && m.is_host);
+    if (!host) throw new DomainValidationError("Only the host can complete the spar.");
+
+    const evaluation = await getEvaluationBySparId(client, sparId);
+    if (!evaluation || evaluation.status !== "submitted") {
+      throw new DomainValidationError("Cannot complete the spar until all judges have submitted their ballot.");
+    }
+
+    await updateSparStatus(client, sparId, "done");
   });
 }
 

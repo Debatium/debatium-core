@@ -29,12 +29,6 @@ async function withTransaction<T>(fn: (client: pg.PoolClient) => Promise<T>): Pr
   }
 }
 
-function getEvaluationWindow(startTime: any) {
-  const sparTime = startTime instanceof Date ? startTime : new Date(startTime as string);
-  const canEvaluateAt = new Date(sparTime.getTime() + 30 * 60 * 1000);
-  const windowEnd = new Date(canEvaluateAt.getTime() + 48 * 60 * 60 * 1000);
-  return { sparTime, canEvaluateAt, windowEnd };
-}
 
 function getJudgeId(members: any[]): string | null {
   const judge = members.find(m => m.role === "judge" && m.status === "accepted");
@@ -42,25 +36,16 @@ function getJudgeId(members: any[]): string | null {
 }
 
 export async function submitBallotService(userId: string, data: any): Promise<void> {
-  const { sparId, teams, replySpeeches } = data;
+    const { sparId, teams, replySpeeches, teamFeedbacks, rfd } = data;
   if (!sparId) throw new DomainValidationError("sparId is required");
 
   await withTransaction(async (client) => {
     const spar = await getSparById(client, sparId);
     if (!spar) throw new DomainValidationError("Spar not found");
 
-    const { canEvaluateAt, windowEnd } = getEvaluationWindow(spar.time);
-    const now = Date.now();
-
     if (spar.status === "cancelled") throw new DomainValidationError("Spar is cancelled, evaluation is not available.");
     if (!spar.expecting_judge) throw new DomainValidationError("This spar does not have a judge.");
-
-    if (now < canEvaluateAt.getTime()) {
-      throw new DomainValidationError("Evaluation is only available 30 minutes after the spar start time.");
-    }
-    if (now > windowEnd.getTime()) {
-      throw new DomainValidationError("The 48-hour evaluation window has closed.");
-    }
+    if (spar.status !== "evaluating") throw new DomainValidationError("Ballot submission is only open during the evaluation phase.");
 
     const members = await getSparMembers(client, sparId);
     const isJudge = members.some(m => String(m.user_id) === userId && m.role === "judge" && m.status === "accepted");
@@ -92,7 +77,14 @@ export async function submitBallotService(userId: string, data: any): Promise<vo
     const placements = computePlacements(format, teams, replySpeeches);
 
     // Persistence — update the evaluation row
-    await submitBallot(client, sparId, { teams, replySpeeches: replySpeeches || null }, placements);
+    const resultsJson: Record<string, unknown> = { teams, replySpeeches: replySpeeches || null };
+    if (teamFeedbacks && typeof teamFeedbacks === "object") {
+      resultsJson.teamFeedbacks = teamFeedbacks;
+    }
+    if (rfd && typeof rfd === "string" && rfd.trim()) {
+      resultsJson.rfd = rfd.trim();
+    }
+    await submitBallot(client, sparId, resultsJson, placements);
 
     // Notifications
     for (const debater of acceptedDebaters) {
@@ -116,18 +108,9 @@ export async function submitFeedbackService(userId: string, data: any): Promise<
     const spar = await getSparById(client, sparId);
     if (!spar) throw new DomainValidationError("Spar not found");
 
-    const { canEvaluateAt, windowEnd } = getEvaluationWindow(spar.time);
-    const now = Date.now();
-
     if (spar.status === "cancelled") throw new DomainValidationError("Spar is cancelled.");
     if (!spar.expecting_judge) throw new DomainValidationError("This spar does not have a judge.");
-
-    if (now < canEvaluateAt.getTime()) {
-      throw new DomainValidationError("Feedback is only available 30 minutes after the spar start time.");
-    }
-    if (now > windowEnd.getTime()) {
-      throw new DomainValidationError("The 48-hour evaluation window has closed.");
-    }
+    if (spar.status !== "evaluating") throw new DomainValidationError("Feedback submission is only open during the evaluation phase.");
 
     const members = await getSparMembers(client, sparId);
     const isDebater = members.some(m => String(m.user_id) === userId && m.role === "debater" && m.status === "accepted");
@@ -183,46 +166,69 @@ export async function getEvaluationDataService(userId: string, sparId: string): 
   if (!member) throw new PermissionDeniedError("You are not an accepted member of this spar.");
 
   const role = member.role;
-  if (role === "observer") throw new PermissionDeniedError("Observers cannot access evaluation data.");
-
-  const { canEvaluateAt, windowEnd } = getEvaluationWindow(spar.time);
-  const now = Date.now();
-  const isWindowExpired = now > windowEnd.getTime();
-  const isTooEarly = now < canEvaluateAt.getTime();
+  // Observers without host flag are blocked
+  if (role === "observer" && !member.is_host) throw new PermissionDeniedError("Observers cannot access evaluation data.");
 
   const evaluation = await getEvaluationBySparId(pool, sparId);
+  const ballotSubmitted = evaluation?.status === "submitted";
 
+  // HOST BRANCH
+  if (member.is_host) {
+    if (spar.status === "evaluating") {
+      return { status: "evaluating", ballotSubmitted };
+    }
+    if (spar.status === "done" && ballotSubmitted) {
+      const feedbacks = evaluation!.feedbacksJson ?? [];
+      const sanitizedFeedbacks = feedbacks.map((f: FeedbackEntry) => {
+        const rating = typeof f.rating === "string" ? parseFloat(f.rating) : f.rating;
+        if (f.isAnonymous) {
+          return { sparId, rating, comment: f.comment, isAnonymous: true, createdAt: f.createdAt };
+        }
+        return { ...f, rating };
+      });
+      return {
+        status: "complete",
+        ballotSubmitted: true,
+        feedbacks: sanitizedFeedbacks,
+        ballot: {
+          sparId: evaluation!.sparId,
+          judgeId: evaluation!.judgeId,
+          resultsJson: evaluation!.resultsJson,
+          placementsJson: evaluation!.placementsJson,
+          createdAt: evaluation!.updatedAt,
+        },
+      };
+    }
+    // done but no ballot — judge never submitted during evaluation phase
+    return { status: "disabled", message: "The evaluation phase ended without a submitted ballot." };
+  }
+
+  // DEBATER BRANCH
   if (role === "debater") {
     const feedbackSubmitted = evaluation
       ? evaluation.feedbacksJson.some((f: FeedbackEntry) => f.debaterId === userId)
       : false;
 
-    if (evaluation?.status === "submitted") {
+    if (ballotSubmitted) {
       return {
         status: "complete",
         ballot: {
-          sparId: evaluation.sparId,
-          judgeId: evaluation.judgeId,
-          resultsJson: evaluation.resultsJson,
-          placementsJson: evaluation.placementsJson,
-          createdAt: evaluation.updatedAt,
+          sparId: evaluation!.sparId,
+          judgeId: evaluation!.judgeId,
+          resultsJson: evaluation!.resultsJson,
+          placementsJson: evaluation!.placementsJson,
+          createdAt: evaluation!.updatedAt,
         },
         feedbackSubmitted,
       };
     }
 
-    if (isWindowExpired) {
+    if (spar.status === "done") {
+      // Final done with no ballot means judge never submitted
       return { status: "draw", message: "The judge did not submit a ballot. The match is scored as a draw." };
     }
 
-    if (isTooEarly) {
-      return {
-        status: "pending",
-        message: "Evaluation will be available 30 minutes after the spar start time.",
-        feedbackSubmitted,
-      };
-    }
-
+    // evaluating — waiting for judge
     return {
       status: "pending",
       message: "Waiting for the judge to submit the ballot.",
@@ -230,22 +236,36 @@ export async function getEvaluationDataService(userId: string, sparId: string): 
     };
   }
 
+  // JUDGE BRANCH
   if (role === "judge") {
-    if (!evaluation || evaluation.status !== "submitted") {
-      if (isTooEarly) return { status: "pending", message: "Evaluation will be available 30 minutes after the spar start time." };
-      if (!isWindowExpired) return { status: "pending", message: "Submit your ballot to unlock debater feedback." };
+    if (ballotSubmitted) {
+      const feedbacks = evaluation!.feedbacksJson ?? [];
+      const sanitizedFeedbacks = feedbacks.map((f: FeedbackEntry) => {
+        const rating = typeof f.rating === "string" ? parseFloat(f.rating) : f.rating;
+        if (f.isAnonymous) {
+          return { sparId, rating, comment: f.comment, isAnonymous: true, createdAt: f.createdAt };
+        }
+        return { ...f, rating };
+      });
+      return {
+        status: "complete",
+        feedbacks: sanitizedFeedbacks,
+        ballot: {
+          sparId: evaluation!.sparId,
+          judgeId: evaluation!.judgeId,
+          resultsJson: evaluation!.resultsJson,
+          placementsJson: evaluation!.placementsJson,
+          createdAt: evaluation!.updatedAt,
+        },
+      };
     }
 
-    const feedbacks = evaluation?.feedbacksJson ?? [];
-    const sanitizedFeedbacks = feedbacks.map((f: FeedbackEntry) => {
-      const rating = typeof f.rating === "string" ? parseFloat(f.rating) : f.rating;
-      if (f.isAnonymous) {
-        return { sparId, rating, comment: f.comment, isAnonymous: true, createdAt: f.createdAt };
-      }
-      return { ...f, rating };
-    });
+    if (spar.status === "done") {
+      return { status: "disabled", message: "The evaluation phase has ended without a submitted ballot." };
+    }
 
-    return { status: "complete", feedbacks: sanitizedFeedbacks };
+    // evaluating — ballot not yet submitted
+    return { status: "pending", message: "Submit your ballot to unlock debater feedback." };
   }
 
   throw new PermissionDeniedError("Invalid role for evaluation data.");
