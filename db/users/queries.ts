@@ -351,3 +351,68 @@ export async function updateUserCalendarKey(
     [calendarKey, userId]
   );
 }
+
+// ── Wallet / Coin queries ──
+
+export async function getUserBalances(pool: DbClient, userId: string): Promise<{ availableBalance: number, frozenBalance: number } | null> {
+  const { rows } = await pool.query(
+    `SELECT available_balance, frozen_balance FROM users WHERE id = $1`,
+    [userId]
+  );
+  if (!rows[0]) return null;
+  return {
+    availableBalance: Number(rows[0].available_balance),
+    frozenBalance: Number(rows[0].frozen_balance)
+  };
+}
+
+export async function recordTopUpSuccess(pool: DbClient, userId: string, amount: number): Promise<void> {
+  await pool.query(
+    `UPDATE users SET available_balance = available_balance + $1 WHERE id = $2`,
+    [amount, userId]
+  );
+}
+
+export async function freezeBalance(pool: DbClient, userId: string, amount: number): Promise<void> {
+  const { rowCount } = await pool.query(
+    `UPDATE users
+     SET available_balance = available_balance - $1,
+         frozen_balance = frozen_balance + $1
+     WHERE id = $2 AND available_balance >= $1`,
+    [amount, userId]
+  );
+  if (rowCount === 0) {
+    throw new Error("Insufficient available balance to freeze: " + amount);
+  }
+}
+
+export async function releaseBalance(pool: DbClient, fromUserId: string, toUserId: string, amount: number, platformCutPercent: number): Promise<void> {
+  // Deduct frozen from fromUserId
+  const { rowCount } = await pool.query(
+    `UPDATE users SET frozen_balance = frozen_balance - $1 WHERE id = $2 AND frozen_balance >= $1`,
+    [amount, fromUserId]
+  );
+  if (rowCount === 0) {
+    throw new Error("Insufficient frozen balance to release");
+  }
+  
+  // Add available to toUserId (minus platform cut)
+  const toAdd = Math.floor(amount * (1 - platformCutPercent / 100));
+  await pool.query(
+    `UPDATE users SET available_balance = available_balance + $1 WHERE id = $2`,
+    [toAdd, toUserId]
+  );
+}
+
+export async function refundBalance(pool: DbClient, userId: string, amount: number): Promise<void> {
+  const { rowCount } = await pool.query(
+    `UPDATE users
+     SET frozen_balance = frozen_balance - $1,
+         available_balance = available_balance + $1
+     WHERE id = $2 AND frozen_balance >= $1`,
+    [amount, userId]
+  );
+  if (rowCount === 0) {
+    throw new Error("Insufficient frozen balance to refund");
+  }
+}

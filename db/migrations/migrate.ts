@@ -6,9 +6,7 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const DB_URL =
-  process.env.DATABASE_URL ||
-  "postgresql://user:password@localhost:5440/dev_db";
+const DB_URL = "postgresql://user:password@localhost:5440/dev_db";
 
 const TEST_PASSWORD = "TestPassword123@";
 
@@ -31,12 +29,14 @@ export async function runMigrations(customDbUrl?: string) {
   const client = await pool.connect();
 
   try {
-    // Create migration tracking table
+    // Create migration tracking table (idempotent with trial)
     await client.query(`
-      CREATE TABLE IF NOT EXISTS schema_migrations (
-        version VARCHAR(100) PRIMARY KEY,
-        applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
+      DO $$ BEGIN
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+          version VARCHAR(100) PRIMARY KEY,
+          applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      EXCEPTION WHEN duplicate_table OR duplicate_object THEN NULL; END $$;
     `);
 
     // Get already-applied migrations
@@ -94,8 +94,7 @@ export async function runMigrations(customDbUrl?: string) {
 
     console.log("\nAll migrations applied successfully.");
   } catch (err) {
-    console.error("Migration failed:", err);
-    process.exit(1);
+    throw err;
   } finally {
     client.release();
     await pool.end();
@@ -103,5 +102,8 @@ export async function runMigrations(customDbUrl?: string) {
 }
 
 if (process.argv[1] && process.argv[1].endsWith("migrate.ts")) {
-  runMigrations();
+  runMigrations().catch((err) => {
+    console.error("Migration CLI failed:", err);
+    process.exit(1);
+  });
 }
