@@ -12,6 +12,7 @@ export enum TransactionType {
   FREEZE = "freeze",
   RELEASE = "release",
   REFUND = "refund",
+  WITHDRAWAL = "withdrawal",
 }
 
 export interface Transaction {

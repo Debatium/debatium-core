@@ -354,15 +354,16 @@ export async function updateUserCalendarKey(
 
 // ── Wallet / Coin queries ──
 
-export async function getUserBalances(pool: DbClient, userId: string): Promise<{ availableBalance: number, frozenBalance: number } | null> {
+export async function getUserBalances(pool: DbClient, userId: string): Promise<{ availableBalance: number, frozenBalance: number, pendingWithdrawal: number } | null> {
   const { rows } = await pool.query(
-    `SELECT available_balance, frozen_balance FROM users WHERE id = $1`,
+    `SELECT available_balance, frozen_balance, pending_withdrawal FROM users WHERE id = $1`,
     [userId]
   );
   if (!rows[0]) return null;
   return {
     availableBalance: Number(rows[0].available_balance),
-    frozenBalance: Number(rows[0].frozen_balance)
+    frozenBalance: Number(rows[0].frozen_balance),
+    pendingWithdrawal: Number(rows[0].pending_withdrawal)
   };
 }
 
@@ -416,3 +417,45 @@ export async function refundBalance(pool: DbClient, userId: string, amount: numb
     throw new Error("Insufficient frozen balance to refund");
   }
 }
+
+// ── Withdrawal / Bank Info queries ──
+
+export async function getUserBankInfo(pool: DbClient, userId: string): Promise<{ bankName: string | null, bankAccountNumber: string | null, bankAccountHolder: string | null } | null> {
+  const { rows } = await pool.query(
+    `SELECT bank_name, bank_account_number, bank_account_holder FROM users WHERE id = $1`,
+    [userId]
+  );
+  if (!rows[0]) return null;
+  return {
+    bankName: rows[0].bank_name ?? null,
+    bankAccountNumber: rows[0].bank_account_number ?? null,
+    bankAccountHolder: rows[0].bank_account_holder ?? null
+  };
+}
+
+export async function updateBankInfo(
+  pool: DbClient,
+  userId: string,
+  bankName: string,
+  bankAccountNumber: string,
+  bankAccountHolder: string
+): Promise<void> {
+  await pool.query(
+    `UPDATE users SET bank_name = $1, bank_account_number = $2, bank_account_holder = $3 WHERE id = $4`,
+    [bankName, bankAccountNumber, bankAccountHolder, userId]
+  );
+}
+
+export async function moveToPendingWithdrawal(pool: DbClient, userId: string, amount: number): Promise<void> {
+  const { rowCount } = await pool.query(
+    `UPDATE users
+     SET available_balance = available_balance - $1,
+         pending_withdrawal = pending_withdrawal + $1
+     WHERE id = $2 AND available_balance >= $1`,
+    [amount, userId]
+  );
+  if (rowCount === 0) {
+    throw new Error("Insufficient available balance for withdrawal");
+  }
+}
+

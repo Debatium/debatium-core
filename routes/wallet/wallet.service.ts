@@ -7,7 +7,9 @@ import {
   TransactionStatus,
   Transaction,
 } from "../../db/transactions/domain.js";
-import { getUserBalances, recordTopUpSuccess } from "../../db/users/queries.js";
+import { getUserBalances, recordTopUpSuccess, getUserBankInfo, updateBankInfo as updateBankInfoQuery, moveToPendingWithdrawal } from "../../db/users/queries.js";
+import { insertWithdrawalRequest, getWithdrawalsByUserId } from "../../db/withdrawals/queries.js";
+import { WithdrawalStatus, type WithdrawalRequest } from "../../db/withdrawals/domain.js";
 import { DomainValidationError } from "../../db/exceptions.js";
 
 const PACKAGES = {
@@ -16,6 +18,9 @@ const PACKAGES = {
   PKG_200: { coins: 220, price: 200000 },
   PKG_500: { coins: 575, price: 500000 },
 };
+
+const MIN_WITHDRAWAL = 10;
+const COIN_TO_VND = 1000;
 
 export async function createTopUpService(
   userId: string,
@@ -74,7 +79,7 @@ export async function createTopUpService(
 export async function getUserBalancesService(userId: string) {
   const pool = getPool();
   const balances = await getUserBalances(pool, userId);
-  return balances || { availableBalance: 0, frozenBalance: 0 };
+  return balances || { availableBalance: 0, frozenBalance: 0, pendingWithdrawal: 0 };
 }
 
 export async function syncTransactionStatusService(userId: string, orderCode: number) {
@@ -141,4 +146,96 @@ export async function cancelTransactionService(orderCode: number): Promise<boole
     return true;
   }
   return false;
+}
+
+// ── Withdrawal Services ──
+
+export async function requestWithdrawalService(userId: string, amountCoin: number) {
+  if (!Number.isFinite(amountCoin) || amountCoin < MIN_WITHDRAWAL) {
+    throw new DomainValidationError(`Minimum withdrawal is ${MIN_WITHDRAWAL} coins`);
+  }
+
+  const pool = getPool();
+
+  // Validate bank info
+  const bankInfo = await getUserBankInfo(pool, userId);
+  if (!bankInfo || !bankInfo.bankName || !bankInfo.bankAccountNumber || !bankInfo.bankAccountHolder) {
+    throw new DomainValidationError("Bank information is required before withdrawing");
+  }
+
+  const amountVnd = amountCoin * COIN_TO_VND;
+  const now = new Date();
+  const idempotencyKey = uuidv4();
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // Move coins from available to pending_withdrawal
+    await moveToPendingWithdrawal(client, userId, amountCoin);
+
+    // Create withdrawal request
+    const withdrawalRequest: WithdrawalRequest = {
+      id: uuidv4(),
+      userId,
+      amountCoin,
+      amountVnd,
+      status: WithdrawalStatus.PENDING,
+      idempotencyKey,
+      bankName: bankInfo.bankName,
+      bankAccountNumber: bankInfo.bankAccountNumber,
+      bankAccountHolder: bankInfo.bankAccountHolder,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await insertWithdrawalRequest(client, withdrawalRequest);
+
+    // Record a withdrawal transaction
+    const transaction: Transaction = {
+      id: uuidv4(),
+      userId,
+      type: TransactionType.WITHDRAWAL,
+      status: TransactionStatus.PENDING,
+      amountCoin,
+      amountVnd,
+      orderCode: null,
+      checkoutUrl: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await insertTransaction(client, transaction);
+
+    await client.query("COMMIT");
+    return withdrawalRequest;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export async function getWithdrawalsService(userId: string) {
+  const pool = getPool();
+  return getWithdrawalsByUserId(pool, userId);
+}
+
+export async function getBankInfoService(userId: string) {
+  const pool = getPool();
+  const info = await getUserBankInfo(pool, userId);
+  return info || { bankName: null, bankAccountNumber: null, bankAccountHolder: null };
+}
+
+export async function updateBankInfoService(
+  userId: string,
+  bankName: string,
+  bankAccountNumber: string,
+  bankAccountHolder: string
+) {
+  if (!bankName || !bankAccountNumber || !bankAccountHolder) {
+    throw new DomainValidationError("All bank info fields are required");
+  }
+  const pool = getPool();
+  await updateBankInfoQuery(pool, userId, bankName, bankAccountNumber, bankAccountHolder);
+  return { bankName, bankAccountNumber, bankAccountHolder };
 }
