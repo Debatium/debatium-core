@@ -15,6 +15,9 @@ import { sendSparInviteEmail } from "../../extensions/email.js";
 import { NotificationEventType } from "../../db/notifications/domain.js";
 import { createNotification, notifyInAppAndEmail } from "../notifications/notifications.services.js";
 import { NotificationChannel } from "../../db/notifications/domain.js";
+import { freezeBalance, refundBalance } from "../../db/users/queries.js";
+
+const SPAR_FEE = 10;
 
 interface InviteInput {
   email?: string;
@@ -150,6 +153,14 @@ export async function createSparService(
   return withTransaction(async (client) => {
     const createdSparId = await createSpar(client, sparData, hostData);
 
+    if (hostData.role === "debater") {
+      try {
+        await freezeBalance(client, userId, SPAR_FEE);
+      } catch (err: any) {
+        throw new DomainValidationError(err.message || "Insufficient balance to host the spar");
+      }
+    }
+
     if (invites.length > 0) {
       const hostUser = await getUserById(client, userId);
       const resolvedInvites = await resolveAndInvite(client, createdSparId, userId, hostUser?.fullName ?? "A host", invites, {
@@ -237,6 +248,14 @@ export async function requestJoinSparService(userId: string, data: Record<string
     const members = await getSparMembers(client, sparId);
     if (members.some(m => String(m.user_id) === userId)) {
       throw new DomainValidationError("You are already a member of this spar");
+    }
+
+    if (role === "debater") {
+      try {
+        await freezeBalance(client, userId, SPAR_FEE);
+      } catch (err: any) {
+        throw new DomainValidationError(err.message || "Insufficient balance to join the spar");
+      }
     }
 
     await insertSparMember(client, sparId, userId, role, "pending");
@@ -402,6 +421,15 @@ export async function acceptRequestSparService(userId: string, data: Record<stri
         const judgeCount = members.filter(m => m.role === "judge" && m.status === "accepted").length;
         if (judgeCount >= 1) throw new DomainValidationError("A spar room can only have one judge");
       }
+      
+      if (me.role === "debater") {
+        try {
+          await freezeBalance(client, userId, SPAR_FEE);
+        } catch (err: any) {
+          throw new DomainValidationError(err.message || "Insufficient balance to join the spar");
+        }
+      }
+
       await upsertSparMember(client, sparId, userId, me.role as string, "accepted");
 
       // Notify host that invited user accepted
@@ -445,6 +473,11 @@ export async function declineRequestSparService(userId: string, data: Record<str
     if (targetUserId && targetUserId !== userId) {
       const host = members.find(m => String(m.user_id) === userId && m.is_host);
       if (!host) throw new DomainValidationError("Only host can decline others");
+      
+      const target = members.find(m => String(m.user_id) === targetUserId);
+      if (target && target.role === "debater" && target.status === "pending") {
+        await refundBalance(client, targetUserId, SPAR_FEE);
+      }
       await removeSparMember(client, sparId, targetUserId);
 
       // T-03: Notify target user their request was REJECTED
@@ -540,6 +573,10 @@ export async function leaveSparService(userId: string, data: Record<string, unkn
         });
       }
     }
+    
+    if (me && me.role === "debater" && (me.status === "accepted" || me.status === "pending")) {
+      await refundBalance(client, userId, SPAR_FEE);
+    }
     await removeSparMember(client, sparId, userId);
   });
 }
@@ -554,6 +591,12 @@ export async function kickMemberSparService(userId: string, data: Record<string,
     const sparName = (spar?.name as string) ?? "a spar";
     const host = members.find(m => String(m.user_id) === userId && m.is_host);
     if (!host) throw new DomainValidationError("Only host can kick");
+    
+    const target = members.find(m => String(m.user_id) === targetUserId);
+    if (target && target.role === "debater" && (target.status === "accepted" || target.status === "pending")) {
+      await refundBalance(client, targetUserId, SPAR_FEE);
+    }
+    
     await removeSparMember(client, sparId, targetUserId);
 
     // T-07: Notify kicked user
@@ -586,6 +629,13 @@ export async function cancelSparService(userId: string, data: Record<string, unk
     const host = members.find(m => String(m.user_id) === userId && m.is_host);
     if (!host) throw new DomainValidationError("Only host can cancel");
     await updateSparStatus(client, sparId, "cancelled");
+
+    // Refund all debaters who paid
+    for (const member of members) {
+      if (member.role === "debater" && (member.status === "accepted" || member.status === "pending")) {
+        await refundBalance(client, String(member.user_id), SPAR_FEE);
+      }
+    }
 
     // T-05: Notify all accepted members (except host)
     const acceptedMembers = members.filter(m => m.status === "accepted" && String(m.user_id) !== userId);

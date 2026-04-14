@@ -13,6 +13,10 @@ import {
 } from "../../db/spars/evaluation.queries.js";
 import { createNotification } from "../notifications/notifications.services.js";
 import { NotificationChannel, NotificationEventType } from "../../db/notifications/domain.js";
+import { releaseBalance } from "../../db/users/queries.js";
+
+const SPAR_FEE = 10;
+const PLATFORM_FEE_PERCENT = 15;
 
 async function withTransaction<T>(fn: (client: pg.PoolClient) => Promise<T>): Promise<T> {
   const client = await getPool().connect();
@@ -85,6 +89,12 @@ export async function submitBallotService(userId: string, data: any): Promise<vo
       resultsJson.rfd = rfd.trim();
     }
     await submitBallot(client, sparId, resultsJson, placements);
+
+    // Release coin funds from each debater to the judge
+    const judgeId = String(userId);
+    for (const debater of acceptedDebaters) {
+      await releaseBalance(client, String(debater.user_id), judgeId, SPAR_FEE, PLATFORM_FEE_PERCENT);
+    }
 
     // Notifications
     for (const debater of acceptedDebaters) {
