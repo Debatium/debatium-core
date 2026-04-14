@@ -459,3 +459,14 @@ export async function moveToPendingWithdrawal(pool: DbClient, userId: string, am
   }
 }
 
+export async function deductPendingWithdrawal(pool: DbClient, userId: string, amount: number): Promise<void> {
+  const { rowCount } = await pool.query(
+    `UPDATE users
+     SET pending_withdrawal = pending_withdrawal - $1
+     WHERE id = $2 AND pending_withdrawal >= $1`,
+    [amount, userId]
+  );
+  if (rowCount === 0) {
+    throw new Error("Insufficient pending withdrawal balance to deduct");
+  }
+}

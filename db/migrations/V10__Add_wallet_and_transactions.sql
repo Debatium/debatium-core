@@ -36,13 +36,16 @@ ALTER TABLE users ADD COLUMN bank_account_holder TEXT;
 -- Extend transaction type enum with withdrawal
 ALTER TYPE transaction_type_enum ADD VALUE 'withdrawal';
 
+-- Create withdrawal status enum
+CREATE TYPE withdrawal_status_enum AS ENUM ('pending', 'completed', 'rejected');
+
 -- Create Withdrawal Requests Table
 CREATE TABLE withdrawal_requests (
     id UUID PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     amount_coin NUMERIC NOT NULL,
     amount_vnd NUMERIC NOT NULL,
-    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    status withdrawal_status_enum NOT NULL DEFAULT 'pending',
     idempotency_key TEXT NOT NULL UNIQUE,
     bank_name TEXT NOT NULL,
     bank_account_number TEXT NOT NULL,
@@ -52,3 +55,4 @@ CREATE TABLE withdrawal_requests (
 );
 
 CREATE INDEX idx_withdrawal_requests_user_id ON withdrawal_requests(user_id);
+

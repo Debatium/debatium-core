@@ -7,10 +7,13 @@ import {
   TransactionStatus,
   Transaction,
 } from "../../db/transactions/domain.js";
-import { getUserBalances, recordTopUpSuccess, getUserBankInfo, updateBankInfo as updateBankInfoQuery, moveToPendingWithdrawal } from "../../db/users/queries.js";
-import { insertWithdrawalRequest, getWithdrawalsByUserId } from "../../db/withdrawals/queries.js";
+import { getUserBalances, recordTopUpSuccess, getUserBankInfo, updateBankInfo as updateBankInfoQuery, moveToPendingWithdrawal, deductPendingWithdrawal, getUserById } from "../../db/users/queries.js";
+import { insertWithdrawalRequest, getWithdrawalsByUserId, getWithdrawalById, updateWithdrawalStatus as updateWithdrawalStatusQuery } from "../../db/withdrawals/queries.js";
 import { WithdrawalStatus, type WithdrawalRequest } from "../../db/withdrawals/domain.js";
 import { DomainValidationError } from "../../db/exceptions.js";
+import { createNotification } from "../notifications/notifications.services.js";
+import { NotificationEventType, NotificationChannel } from "../../db/notifications/domain.js";
+import { sendWithdrawalCompletedEmail } from "../../extensions/email.js";
 
 const PACKAGES = {
   PKG_50: { coins: 50, price: 50000 },
@@ -238,4 +241,66 @@ export async function updateBankInfoService(
   const pool = getPool();
   await updateBankInfoQuery(pool, userId, bankName, bankAccountNumber, bankAccountHolder);
   return { bankName, bankAccountNumber, bankAccountHolder };
+}
+
+/**
+ * Admin confirms a withdrawal has been paid. This:
+ * 1. Deducts pending_withdrawal from the user's balance
+ * 2. Updates the withdrawal request status to "completed"
+ * 3. Sends in-app notification + email to the user
+ */
+export async function confirmWithdrawalService(withdrawalId: string) {
+  const pool = getPool();
+  const withdrawal = await getWithdrawalById(pool, withdrawalId);
+
+  if (!withdrawal) {
+    throw new DomainValidationError("Withdrawal request not found");
+  }
+  if (withdrawal.status !== WithdrawalStatus.PENDING) {
+    throw new DomainValidationError("Withdrawal has already been processed");
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // 1. Deduct pending_withdrawal permanently
+    await deductPendingWithdrawal(client, withdrawal.userId, withdrawal.amountCoin);
+
+    // 2. Mark withdrawal as completed
+    await updateWithdrawalStatusQuery(client, withdrawalId, WithdrawalStatus.COMPLETED);
+
+    // 3. Send in-app notification
+    await createNotification(client, {
+      customerId: withdrawal.userId,
+      eventType: NotificationEventType.WITHDRAWAL_COMPLETED,
+      channel: NotificationChannel.IN_APP,
+      referenceId: withdrawalId,
+      referenceType: "withdrawal",
+      payload: {
+        amountCoin: withdrawal.amountCoin,
+        amountVnd: withdrawal.amountVnd,
+      },
+    });
+
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  // 4. Send email asynchronously (outside transaction — non-critical)
+  const user = await getUserById(pool, withdrawal.userId);
+  if (user) {
+    sendWithdrawalCompletedEmail(
+      user.email,
+      user.fullName,
+      withdrawal.amountCoin,
+      withdrawal.amountVnd
+    ).catch(() => {}); // fire-and-forget
+  }
+
+  return { ...withdrawal, status: WithdrawalStatus.COMPLETED };
 }

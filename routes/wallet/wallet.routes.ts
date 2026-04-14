@@ -8,6 +8,7 @@ import {
   getWithdrawalsService,
   getBankInfoService,
   updateBankInfoService,
+  confirmWithdrawalService,
 } from "./wallet.service.js";
 
 export function createWalletRouter(isProd: boolean): Router {
@@ -104,6 +105,22 @@ export function createWalletRouter(isProd: boolean): Router {
         const { bankName, bankAccountNumber, bankAccountHolder } = req.body;
         const info = await updateBankInfoService(req.userId!, bankName, bankAccountNumber, bankAccountHolder);
         res.status(200).json(info);
+      } catch (err) {
+        next(err);
+      }
+    }
+  );
+
+  // ── Admin Endpoint ──
+
+  router.post(
+    "/confirm-withdrawal",
+    requireAuth(isProd),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const { withdrawalId } = req.body;
+        const result = await confirmWithdrawalService(withdrawalId);
+        res.status(200).json(result);
       } catch (err) {
         next(err);
       }

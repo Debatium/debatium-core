@@ -6,6 +6,10 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+// const DB_URL =
+//   process.env.DATABASE_URL ||
+//   "postgresql://user:password@localhost:5440/dev_db";
+
 const DB_URL = "postgresql://user:password@localhost:5440/dev_db";
 
 const TEST_PASSWORD = "TestPassword123@";

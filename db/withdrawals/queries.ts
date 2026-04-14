@@ -56,3 +56,29 @@ export async function getWithdrawalsByUserId(
   );
   return rows.map(mapRow);
 }
+
+export async function getWithdrawalById(
+  pool: DbClient,
+  withdrawalId: string
+): Promise<WithdrawalRequest | null> {
+  const { rows } = await pool.query(
+    `SELECT id, user_id, amount_coin, amount_vnd, status, idempotency_key,
+            bank_name, bank_account_number, bank_account_holder, created_at, updated_at
+     FROM withdrawal_requests WHERE id = $1`,
+    [withdrawalId]
+  );
+  if (!rows[0]) return null;
+  return mapRow(rows[0]);
+}
+
+export async function updateWithdrawalStatus(
+  pool: DbClient,
+  withdrawalId: string,
+  status: string
+): Promise<void> {
+  await pool.query(
+    `UPDATE withdrawal_requests SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+    [status, withdrawalId]
+  );
+}
+

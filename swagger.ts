@@ -466,6 +466,39 @@ const options: swaggerJsdoc.Options = {
               example: 10,
               description: "Coins locked for active spars",
             },
+            pendingWithdrawal: {
+              type: "number",
+              example: 0,
+              description: "Coins in pending withdrawal requests (awaiting admin payout)",
+            },
+          },
+        },
+        WithdrawalRequest: {
+          type: "object",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            userId: { type: "string", format: "uuid" },
+            amountCoin: { type: "number", example: 20 },
+            amountVnd: { type: "number", example: 20000 },
+            status: {
+              type: "string",
+              enum: ["pending", "completed", "rejected"],
+              description: "pending → awaiting admin payout, completed → bank transfer done, rejected → admin declined",
+            },
+            idempotencyKey: { type: "string", format: "uuid" },
+            bankName: { type: "string", example: "Vietcombank" },
+            bankAccountNumber: { type: "string", example: "1234567890" },
+            bankAccountHolder: { type: "string", example: "NGUYEN VAN A" },
+            createdAt: { type: "string", format: "date-time" },
+            updatedAt: { type: "string", format: "date-time" },
+          },
+        },
+        BankInfo: {
+          type: "object",
+          properties: {
+            bankName: { type: "string", nullable: true, example: "Vietcombank" },
+            bankAccountNumber: { type: "string", nullable: true, example: "1234567890" },
+            bankAccountHolder: { type: "string", nullable: true, example: "NGUYEN VAN A" },
           },
         },
       },
@@ -2314,6 +2347,199 @@ const options: swaggerJsdoc.Options = {
             },
             "400": {
               description: "Transaction not found or unauthorized",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Error" },
+                },
+              },
+            },
+            "401": { description: "Not authenticated" },
+          },
+        },
+      },
+
+      // ── Withdrawal ──
+      "/wallet/withdraw": {
+        post: {
+          tags: ["Wallet"],
+          summary: "Request a coin withdrawal",
+          security: [{ bearerAuth: [] }],
+          description:
+            "Creates a new withdrawal request. Moves `amountCoin` from `available_balance` to `pending_withdrawal`. " +
+            "Requires the user to have bank info saved first.\n\n" +
+            "**Rules:**\n" +
+            "- Minimum withdrawal: **10 coins** (= 10,000 VND)\n" +
+            "- Exchange rate: **1 Coin = 1,000 VND**\n" +
+            "- Bank info must be saved via `PUT /wallet/bank-info` before requesting\n" +
+            "- Coins are atomically moved from `available_balance` → `pending_withdrawal`\n" +
+            "- Admin processes the bank transfer, then calls `POST /wallet/confirm-withdrawal`",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["amountCoin"],
+                  properties: {
+                    amountCoin: {
+                      type: "number",
+                      minimum: 10,
+                      example: 20,
+                      description: "Number of coins to withdraw (min 10)",
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "201": {
+              description: "Withdrawal request created",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/WithdrawalRequest" },
+                },
+              },
+            },
+            "400": {
+              description: "Validation error (insufficient balance, missing bank info, below minimum)",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Error" },
+                },
+              },
+            },
+            "401": { description: "Not authenticated" },
+          },
+        },
+      },
+      "/wallet/withdrawals": {
+        get: {
+          tags: ["Wallet"],
+          summary: "List my withdrawal requests",
+          security: [{ bearerAuth: [] }],
+          description: "Returns all withdrawal requests for the current user, ordered by most recent first.",
+          responses: {
+            "200": {
+              description: "List of withdrawal requests",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "array",
+                    items: { $ref: "#/components/schemas/WithdrawalRequest" },
+                  },
+                },
+              },
+            },
+            "401": { description: "Not authenticated" },
+          },
+        },
+      },
+      "/wallet/bank-info": {
+        get: {
+          tags: ["Wallet"],
+          summary: "Get my bank information",
+          security: [{ bearerAuth: [] }],
+          description: "Returns the current user's saved bank information for withdrawals. All fields are null if not yet configured.",
+          responses: {
+            "200": {
+              description: "Bank info",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/BankInfo" },
+                },
+              },
+            },
+            "401": { description: "Not authenticated" },
+          },
+        },
+        put: {
+          tags: ["Wallet"],
+          summary: "Update my bank information",
+          security: [{ bearerAuth: [] }],
+          description: "Save or update the bank details used for withdrawal payouts. All three fields are required.",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["bankName", "bankAccountNumber", "bankAccountHolder"],
+                  properties: {
+                    bankName: { type: "string", example: "Vietcombank" },
+                    bankAccountNumber: { type: "string", example: "1234567890" },
+                    bankAccountHolder: { type: "string", example: "NGUYEN VAN A" },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "Bank info updated",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/BankInfo" },
+                },
+              },
+            },
+            "400": {
+              description: "Validation error (missing fields)",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Error" },
+                },
+              },
+            },
+            "401": { description: "Not authenticated" },
+          },
+        },
+      },
+      "/wallet/confirm-withdrawal": {
+        post: {
+          tags: ["Wallet (Admin)"],
+          summary: "Admin: Confirm a withdrawal has been paid",
+          security: [{ bearerAuth: [] }],
+          description:
+            "**Admin-only endpoint.** Called after the admin manually completes the bank transfer.\n\n" +
+            "This endpoint performs the following atomically in a transaction:\n" +
+            "1. Deducts `amount_coin` from the user's `pending_withdrawal` balance permanently\n" +
+            "2. Updates the withdrawal request status from `pending` → `completed`\n" +
+            "3. Creates an in-app notification (`WITHDRAWAL_COMPLETED`) for the user\n" +
+            "4. Sends a confirmation email to the user via Resend\n\n" +
+            "**Idempotency:** Will reject if the withdrawal is already completed or rejected.",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["withdrawalId"],
+                  properties: {
+                    withdrawalId: {
+                      type: "string",
+                      format: "uuid",
+                      description: "The ID of the withdrawal request to confirm",
+                    },
+                  },
+                },
+                example: {
+                  withdrawalId: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "Withdrawal confirmed and user notified",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/WithdrawalRequest" },
+                },
+              },
+            },
+            "400": {
+              description: "Withdrawal not found or already processed",
               content: {
                 "application/json": {
                   schema: { $ref: "#/components/schemas/Error" },
