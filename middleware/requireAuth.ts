@@ -6,6 +6,7 @@ declare global {
   namespace Express {
     interface Request {
       userId?: string;
+      userRole?: string;
     }
   }
 }
@@ -31,6 +32,7 @@ export function requireAuth(_isProd: boolean) {
     try {
       const payload = verifyAccessToken(token);
       req.userId = payload.userId;
+      req.userRole = payload.role;
       next();
     } catch {
       res.status(401).json({

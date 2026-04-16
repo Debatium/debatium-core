@@ -5,6 +5,7 @@ export enum ErrorCode {
   MISSING_REQUIRED_FIELD = "MISSING_REQUIRED_FIELD",
   SERVER_ERROR = "SERVER_ERROR",
   UNAUTHORIZED = "UNAUTHORIZED",
+  FORBIDDEN = "FORBIDDEN",
 }
 
 export function errorResponse(
