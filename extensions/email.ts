@@ -193,3 +193,87 @@ export async function sendSparInviteEmail(
     logger.error({ err, toEmail, sparId: spar.sparId }, "Failed to send spar invite email");
   }
 }
+
+/**
+ * Send a confirmation email when a withdrawal request has been processed.
+ */
+export async function sendWithdrawalCompletedEmail(
+  toEmail: string,
+  userName: string,
+  amountCoin: number,
+  amountVnd: number
+): Promise<void> {
+  let resend: ReturnType<typeof getResend>;
+  try {
+    resend = getResend();
+  } catch {
+    logger.warn("Resend not configured — skipping withdrawal email");
+    return;
+  }
+
+  const formattedVnd = amountVnd.toLocaleString("vi-VN");
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+    <!-- Header -->
+    <div style="background:#18181b;padding:32px 32px 24px;text-align:center;">
+      <h1 style="color:#fff;margin:0;font-size:24px;font-weight:700;">Debatium</h1>
+    </div>
+
+    <!-- Body -->
+    <div style="padding:32px;">
+      <p style="color:#27272a;font-size:16px;margin:0 0 16px;">Hi ${userName},</p>
+      <p style="color:#27272a;font-size:16px;margin:0 0 24px;">
+        Your withdrawal request has been <strong style="color:#16a34a;">successfully processed</strong>! 🎉
+      </p>
+
+      <!-- Details Card -->
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:20px;margin:0 0 24px;">
+        <h2 style="color:#166534;font-size:16px;margin:0 0 12px;">Withdrawal Completed</h2>
+        <table style="width:100%;border-collapse:collapse;">
+          <tr>
+            <td style="color:#71717a;font-size:14px;padding:4px 0;width:120px;">Amount</td>
+            <td style="color:#27272a;font-size:14px;padding:4px 0;font-weight:600;">${amountCoin} Coins</td>
+          </tr>
+          <tr>
+            <td style="color:#71717a;font-size:14px;padding:4px 0;">VND Transferred</td>
+            <td style="color:#27272a;font-size:14px;padding:4px 0;font-weight:600;">${formattedVnd} VND</td>
+          </tr>
+        </table>
+      </div>
+
+      <p style="color:#52525b;font-size:14px;margin:0;">
+        The funds have been transferred to your registered bank account. Please check your bank statement for the deposit.
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div style="padding:16px 32px;border-top:1px solid #e4e4e7;text-align:center;">
+      <p style="color:#a1a1aa;font-size:12px;margin:0;">
+        You received this email because you requested a withdrawal on Debatium.
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  try {
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: toEmail,
+      subject: `Withdrawal of ${formattedVnd} VND processed successfully`,
+      html,
+    });
+    logger.info({ toEmail, amountCoin, amountVnd }, "Withdrawal completed email sent");
+  } catch (err) {
+    logger.error({ err, toEmail }, "Failed to send withdrawal completed email");
+  }
+}
+

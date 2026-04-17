@@ -428,6 +428,79 @@ const options: swaggerJsdoc.Options = {
             },
           },
         },
+        Transaction: {
+          type: "object",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            userId: { type: "string", format: "uuid" },
+            type: {
+              type: "string",
+              enum: ["top_up", "freeze", "release", "refund"],
+            },
+            status: {
+              type: "string",
+              enum: ["pending", "success", "failed", "cancelled"],
+            },
+            amountCoin: { type: "number", example: 50 },
+            amountVnd: { type: "number", nullable: true, example: 50000 },
+            orderCode: { type: "integer", nullable: true, example: 123456 },
+            checkoutUrl: {
+              type: "string",
+              nullable: true,
+              example: "https://pay.payos.vn/web/abc123",
+            },
+            createdAt: { type: "string", format: "date-time" },
+            updatedAt: { type: "string", format: "date-time" },
+          },
+        },
+        WalletBalances: {
+          type: "object",
+          properties: {
+            availableBalance: {
+              type: "number",
+              example: 50,
+              description: "Coins available for spending",
+            },
+            frozenBalance: {
+              type: "number",
+              example: 10,
+              description: "Coins locked for active spars",
+            },
+            pendingWithdrawal: {
+              type: "number",
+              example: 0,
+              description: "Coins in pending withdrawal requests (awaiting admin payout)",
+            },
+          },
+        },
+        WithdrawalRequest: {
+          type: "object",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            userId: { type: "string", format: "uuid" },
+            amountCoin: { type: "number", example: 20 },
+            amountVnd: { type: "number", example: 20000 },
+            status: {
+              type: "string",
+              enum: ["pending", "completed", "rejected"],
+              description: "pending → awaiting admin payout, completed → bank transfer done, rejected → admin declined",
+            },
+            idempotencyKey: { type: "string", format: "uuid" },
+            bankName: { type: "string", example: "Vietcombank" },
+            bankAccountNumber: { type: "string", example: "1234567890" },
+            bankAccountHolder: { type: "string", example: "NGUYEN VAN A" },
+            createdAt: { type: "string", format: "date-time" },
+            updatedAt: { type: "string", format: "date-time" },
+          },
+        },
+        BankInfo: {
+          type: "object",
+          properties: {
+            bankName: { type: "string", nullable: true, example: "Vietcombank" },
+            bankAccountNumber: { type: "string", nullable: true, example: "1234567890" },
+            bankAccountHolder: { type: "string", nullable: true, example: "NGUYEN VAN A" },
+          },
+        },
       },
       securitySchemes: {
         bearerAuth: {
@@ -2081,6 +2154,471 @@ const options: swaggerJsdoc.Options = {
                           count: { type: "integer", example: 3 },
                         },
                       },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+
+      // ── Wallet ──
+      "/wallet/top-up": {
+        post: {
+          tags: ["Wallet"],
+          summary: "Create a top-up checkout session",
+          description:
+            "Initiates a PayOS checkout session for the selected coin package. Returns a `checkoutUrl` that the frontend should redirect the user to.\n\n" +
+            "### Available Packages:\n" +
+            "| Package ID | Coins | Price (VND) |\n" +
+            "|------------|-------|-------------|\n" +
+            "| `PKG_50`   | 50    | 50,000      |\n" +
+            "| `PKG_100`  | 100   | 100,000     |\n" +
+            "| `PKG_200`  | 220   | 200,000     |\n" +
+            "| `PKG_500`  | 575   | 500,000     |\n\n" +
+            "The checkout link expires after **15 minutes**.\n\n" +
+            "### ⚠️ CRITICAL: Payment Confirmation Flow\n" +
+            "The PayOS webhook (`/payment/payos`) is **NOT operational in production** due to webhook URL registration failure. " +
+            "The **only** way to confirm and fulfill a payment is for the frontend to call `GET /wallet/transaction/{orderCode}` after the user returns from checkout. " +
+            "**The client MUST NOT close the browser window** before this call is made, or the payment will be lost (money debited but coins never credited).\n\n" +
+            "Recommended frontend flow:\n" +
+            "1. Call `POST /wallet/top-up` → get `checkoutUrl`\n" +
+            "2. Redirect user to `checkoutUrl` (PayOS payment page)\n" +
+            "3. PayOS redirects back to `returnUrl` with `orderCode`\n" +
+            "4. Frontend **immediately** calls `GET /wallet/transaction/{orderCode}` to sync and fulfill the payment",
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["packageId"],
+                  properties: {
+                    packageId: {
+                      type: "string",
+                      enum: ["PKG_50", "PKG_100", "PKG_200", "PKG_500"],
+                      example: "PKG_50",
+                      description: "The coin package to purchase",
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "Checkout session created",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      checkoutUrl: {
+                        type: "string",
+                        example: "https://pay.payos.vn/web/abc123",
+                        description: "URL to redirect the user to for payment",
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Invalid package ID",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Error" },
+                },
+              },
+            },
+            "401": { description: "Not authenticated" },
+          },
+        },
+      },
+      "/wallet/balance": {
+        get: {
+          tags: ["Wallet"],
+          summary: "Get current wallet balances",
+          description:
+            "Returns the authenticated user's available and frozen coin balances.",
+          security: [{ bearerAuth: [] }],
+          responses: {
+            "200": {
+              description: "Current balances",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/WalletBalances" },
+                  example: {
+                    availableBalance: 50,
+                    frozenBalance: 10,
+                  },
+                },
+              },
+            },
+            "401": { description: "Not authenticated" },
+          },
+        },
+      },
+      "/wallet/transaction/{orderCode}": {
+        get: {
+          tags: ["Wallet"],
+          summary: "Get and sync transaction status (⚠️ CRITICAL)",
+          description:
+            "Fetches the local transaction record by `orderCode` and attempts to sync its status with PayOS.\n\n" +
+            "### ⚠️ CRITICAL — This Is The ONLY Way To Confirm Payments In Production\n" +
+            "Because the PayOS webhook (`/payment/payos`) is **not operational in production**, this endpoint is the **sole mechanism** for confirming that a payment was successful and crediting coins to the user's wallet. " +
+            "If the frontend does not call this endpoint after the user completes payment, the coins will **never** be credited even though the user's money has been debited.\n\n" +
+            "**The user MUST NOT close the browser window** between completing payment on the PayOS page and being redirected back to the app. " +
+            "The frontend should call this endpoint **immediately** upon return from the PayOS checkout redirect.\n\n" +
+            "### Sync Behavior:\n" +
+            "- If the local status is `pending`, the server queries PayOS for the live status.\n" +
+            "- If PayOS reports `PAID`, the transaction is fulfilled (coins credited) and status becomes `success`.\n" +
+            "- If PayOS reports `CANCELLED`, the status becomes `cancelled`.\n" +
+            "- If the local status is already `success`, `cancelled`, or `failed`, no sync is performed.",
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            {
+              name: "orderCode",
+              in: "path",
+              required: true,
+              schema: { type: "integer" },
+              description: "The PayOS order code associated with the transaction",
+              example: 123456,
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Transaction status and optional PayOS info",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      transaction: { $ref: "#/components/schemas/Transaction" },
+                      payosInfo: {
+                        type: "object",
+                        nullable: true,
+                        description: "Live PayOS payment data (null if already finalized or fetch failed)",
+                      },
+                    },
+                  },
+                  examples: {
+                    pendingSynced: {
+                      summary: "Pending transaction synced with PayOS (now success)",
+                      value: {
+                        transaction: {
+                          id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                          userId: "d290f1ee-6c54-4b01-90e6-d701748f0851",
+                          type: "top_up",
+                          status: "success",
+                          amountCoin: 50,
+                          amountVnd: 50000,
+                          orderCode: 123456,
+                          checkoutUrl: "https://pay.payos.vn/web/abc123",
+                          createdAt: "2026-04-14T10:00:00.000Z",
+                          updatedAt: "2026-04-14T10:05:00.000Z",
+                        },
+                        payosInfo: { status: "PAID", orderCode: 123456 },
+                      },
+                    },
+                    alreadySuccess: {
+                      summary: "Already finalized transaction",
+                      value: {
+                        transaction: {
+                          id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                          userId: "d290f1ee-6c54-4b01-90e6-d701748f0851",
+                          type: "top_up",
+                          status: "success",
+                          amountCoin: 50,
+                          amountVnd: 50000,
+                          orderCode: 123456,
+                          checkoutUrl: "https://pay.payos.vn/web/abc123",
+                          createdAt: "2026-04-14T10:00:00.000Z",
+                          updatedAt: "2026-04-14T10:05:00.000Z",
+                        },
+                        payosInfo: null,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Transaction not found or unauthorized",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Error" },
+                },
+              },
+            },
+            "401": { description: "Not authenticated" },
+          },
+        },
+      },
+
+      // ── Withdrawal ──
+      "/wallet/withdraw": {
+        post: {
+          tags: ["Wallet"],
+          summary: "Request a coin withdrawal",
+          security: [{ bearerAuth: [] }],
+          description:
+            "Creates a new withdrawal request. Moves `amountCoin` from `available_balance` to `pending_withdrawal`. " +
+            "Requires the user to have bank info saved first.\n\n" +
+            "**Rules:**\n" +
+            "- Minimum withdrawal: **10 coins** (= 10,000 VND)\n" +
+            "- Exchange rate: **1 Coin = 1,000 VND**\n" +
+            "- Bank info must be saved via `PUT /wallet/bank-info` before requesting\n" +
+            "- Coins are atomically moved from `available_balance` → `pending_withdrawal`\n" +
+            "- Admin processes the bank transfer, then calls `POST /wallet/confirm-withdrawal`",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["amountCoin"],
+                  properties: {
+                    amountCoin: {
+                      type: "number",
+                      minimum: 10,
+                      example: 20,
+                      description: "Number of coins to withdraw (min 10)",
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "201": {
+              description: "Withdrawal request created",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/WithdrawalRequest" },
+                },
+              },
+            },
+            "400": {
+              description: "Validation error (insufficient balance, missing bank info, below minimum)",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Error" },
+                },
+              },
+            },
+            "401": { description: "Not authenticated" },
+          },
+        },
+      },
+      "/wallet/withdrawals": {
+        get: {
+          tags: ["Wallet"],
+          summary: "List my withdrawal requests",
+          security: [{ bearerAuth: [] }],
+          description: "Returns all withdrawal requests for the current user, ordered by most recent first.",
+          responses: {
+            "200": {
+              description: "List of withdrawal requests",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "array",
+                    items: { $ref: "#/components/schemas/WithdrawalRequest" },
+                  },
+                },
+              },
+            },
+            "401": { description: "Not authenticated" },
+          },
+        },
+      },
+      "/wallet/bank-info": {
+        get: {
+          tags: ["Wallet"],
+          summary: "Get my bank information",
+          security: [{ bearerAuth: [] }],
+          description: "Returns the current user's saved bank information for withdrawals. All fields are null if not yet configured.",
+          responses: {
+            "200": {
+              description: "Bank info",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/BankInfo" },
+                },
+              },
+            },
+            "401": { description: "Not authenticated" },
+          },
+        },
+        put: {
+          tags: ["Wallet"],
+          summary: "Update my bank information",
+          security: [{ bearerAuth: [] }],
+          description: "Save or update the bank details used for withdrawal payouts. All three fields are required.",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["bankName", "bankAccountNumber", "bankAccountHolder"],
+                  properties: {
+                    bankName: { type: "string", example: "Vietcombank" },
+                    bankAccountNumber: { type: "string", example: "1234567890" },
+                    bankAccountHolder: { type: "string", example: "NGUYEN VAN A" },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "Bank info updated",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/BankInfo" },
+                },
+              },
+            },
+            "400": {
+              description: "Validation error (missing fields)",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Error" },
+                },
+              },
+            },
+            "401": { description: "Not authenticated" },
+          },
+        },
+      },
+      "/wallet/confirm-withdrawal": {
+        post: {
+          tags: ["Wallet (Admin)"],
+          summary: "Admin: Confirm a withdrawal has been paid",
+          security: [{ bearerAuth: [] }],
+          description:
+            "**Admin-only endpoint.** Called after the admin manually completes the bank transfer.\n\n" +
+            "This endpoint performs the following atomically in a transaction:\n" +
+            "1. Deducts `amount_coin` from the user's `pending_withdrawal` balance permanently\n" +
+            "2. Updates the withdrawal request status from `pending` → `completed`\n" +
+            "3. Creates an in-app notification (`WITHDRAWAL_COMPLETED`) for the user\n" +
+            "4. Sends a confirmation email to the user via Resend\n\n" +
+            "**Idempotency:** Will reject if the withdrawal is already completed or rejected.",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["withdrawalId"],
+                  properties: {
+                    withdrawalId: {
+                      type: "string",
+                      format: "uuid",
+                      description: "The ID of the withdrawal request to confirm",
+                    },
+                  },
+                },
+                example: {
+                  withdrawalId: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "Withdrawal confirmed and user notified",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/WithdrawalRequest" },
+                },
+              },
+            },
+            "400": {
+              description: "Withdrawal not found or already processed",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Error" },
+                },
+              },
+            },
+            "401": { description: "Not authenticated" },
+          },
+        },
+      },
+
+      // ── Payment Webhooks ──
+      "/payment/payos": {
+        post: {
+          tags: ["Payment"],
+          summary: "PayOS webhook receiver (⚠️ NOT OPERATIONAL IN PRODUCTION)",
+          deprecated: true,
+          description:
+            "**⚠️ THIS ENDPOINT IS NOT OPERATIONAL IN PRODUCTION.** PayOS webhook URL registration has failed, so PayOS never calls this endpoint. " +
+            "The code is kept for future use if webhook registration is resolved.\n\n" +
+            "**In production, payment confirmation is handled entirely by the frontend calling `GET /wallet/transaction/{orderCode}` after checkout redirect.**\n\n" +
+            "### Intended Behavior (when operational):\n" +
+            "- Receives payment status callbacks from PayOS (server-to-server, not called by the frontend).\n" +
+            "- Verifies the webhook payload signature using the PayOS checksum key.\n" +
+            "- Skips test transactions (descriptions: `\"Ma giao dich thu nghiem\"`, `\"VQRIO123\"`).\n" +
+            "- If `webhookData.code === \"00\"` (success), calls `fulfillTransactionService` which:\n" +
+            "  1. Finds the pending transaction by `orderCode`.\n" +
+            "  2. Updates its status to `success`.\n" +
+            "  3. Credits `amountCoin` to the user's `available_balance`.\n" +
+            "- Always responds with `{ error: 0, message: \"Ok\" }` on success or `{ error: -1, message: \"fail\" }` on error.",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  description: "PayOS webhook payload (signed by PayOS)",
+                  properties: {
+                    code: {
+                      type: "string",
+                      example: "00",
+                      description: "Payment result code. '00' indicates success.",
+                    },
+                    desc: { type: "string", example: "success" },
+                    data: {
+                      type: "object",
+                      properties: {
+                        orderCode: { type: "integer", example: 123456 },
+                        amount: { type: "integer", example: 50000 },
+                        description: { type: "string", example: "Top up 50 coins" },
+                        accountNumber: { type: "string" },
+                        reference: { type: "string" },
+                        transactionDateTime: { type: "string" },
+                        currency: { type: "string", example: "VND" },
+                        paymentLinkId: { type: "string" },
+                        code: { type: "string", example: "00" },
+                        desc: { type: "string", example: "success" },
+                      },
+                    },
+                    signature: {
+                      type: "string",
+                      description: "HMAC signature for verification",
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "Webhook processed",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      error: { type: "integer", example: 0 },
+                      message: { type: "string", example: "Ok" },
+                      data: { type: "object", nullable: true },
                     },
                   },
                 },

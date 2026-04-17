@@ -93,6 +93,8 @@ export interface User {
   institution: Institution | null;
   avatarUrl: AvatarURL;
   calendarKey: string | null;
+  availableBalance: number;
+  frozenBalance: number;
 }
 
 // ── Availability ──
