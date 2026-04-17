@@ -8,7 +8,7 @@ import {
   listMyHistorySparsService, requestJoinSparService, inviteUserSparService,
   matchingRequestSparService, acceptRequestSparService, declineRequestSparService,
   leaveSparService, kickMemberSparService, cancelSparService, cancelMatchingSparService,
-  startDebateSparService, startEvaluationSparService, completeSparService,
+  startDebateSparService, startEvaluationSparService,
 } from "./spars.services.js";
 
 function classifyPgError(err: unknown, context?: string): { code: ErrorCode; message: string; status: number } | null {
@@ -214,22 +214,6 @@ export function createSparsRouter(isProd: boolean): Router {
       try {
         await startEvaluationSparService(req.userId!, req.body);
         res.status(200).json({ message: "Evaluation phase started successfully" });
-      } catch (err) {
-        const pgInfo = classifyPgError(err, "default");
-        if (pgInfo) return errorResponse(res, pgInfo.status, pgInfo.code, pgInfo.message);
-        next(err);
-      }
-    }
-  );
-
-  // POST /spars/complete — Host marks spar done after all judges submitted
-  router.post(
-    "/complete",
-    requireAuth(isProd),
-    async (req: Request, res: Response, next: NextFunction) => {
-      try {
-        await completeSparService(req.userId!, req.body);
-        res.status(200).json({ message: "Spar completed successfully" });
       } catch (err) {
         const pgInfo = classifyPgError(err, "default");
         if (pgInfo) return errorResponse(res, pgInfo.status, pgInfo.code, pgInfo.message);

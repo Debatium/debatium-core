@@ -6,6 +6,15 @@ type DbClient = pg.Pool | pg.PoolClient;
 export async function lazyManageSpars(pool: DbClient): Promise<void> {
   const now = new Date();
 
+  // Auto-complete evaluating spars once 3 hours have elapsed since spar start.
+  await pool.query(
+    `UPDATE spars
+     SET status = 'done'
+     WHERE status = 'evaluating'
+       AND time <= $1::timestamptz - INTERVAL '3 hours'`,
+    [now]
+  );
+
   // Release links for expired spars (time + 90 minutes)
   // const { rows: expired } = await pool.query(
   //   `SELECT id FROM spars WHERE status IN ('ready','debating') AND time <= $1::timestamptz - INTERVAL '90 minutes'`,
@@ -16,7 +25,7 @@ export async function lazyManageSpars(pool: DbClient): Promise<void> {
   // }
 
   // Trigger readiness check for created/matching spars entering the 15-minute window.
-  // ready → debating → evaluating → done are all host-controlled transitions.
+  // ready → debating → evaluating remain host-controlled transitions.
 
   // Trigger evaluation for spars entering the 15-minute window
   const { rows: trigger } = await pool.query(

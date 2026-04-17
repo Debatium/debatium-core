@@ -1628,7 +1628,7 @@ const options: swaggerJsdoc.Options = {
           tags: ["Spars/Evaluation"],
           summary: "Submit spar ballot (Judge only)",
           description:
-            "Submit a judge ballot for a completed spar. Only the accepted judge of the spar may call this endpoint.\n\n" +
+            "Submit a judge ballot for a spar in the evaluation phase. Only the accepted judge of the spar may call this endpoint.\n\n" +
             "### Rules:\n" +
             "- **Timing**: Evaluation becomes available **30 minutes** after the spar start time.\n" +
             "- **Judge**: Only the accepted judge can submit.\n" +
@@ -1828,7 +1828,7 @@ const options: swaggerJsdoc.Options = {
           tags: ["Spars/Evaluation"],
           summary: "Submit judge feedback (Debater only)",
           description:
-            "Submit feedback about the judge for a completed spar.\n\n" +
+            "Submit feedback about the judge during the evaluation phase.\n\n" +
             "### Rules:\n" +
             "- **Timing**: Feedback becomes available **30 minutes** after the spar start time.\n" +
             "- **Debater**: Only accepted debaters can submit feedback.\n" +
@@ -2358,48 +2358,6 @@ const options: swaggerJsdoc.Options = {
           responses: {
             "200": {
               description: "Evaluation phase started",
-              content: {
-                "application/json": {
-                  schema: {
-                    type: "object",
-                    properties: { message: { type: "string" } },
-                  },
-                },
-              },
-            },
-            "400": {
-              description: "Invalid state or validation error",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/Error" },
-                },
-              },
-            },
-            "401": { description: "Not authenticated" },
-            "403": { description: "Not the host" },
-          },
-        },
-      },
-      "/spars/complete": {
-        post: {
-          tags: ["Spars"],
-          summary: "Host marks spar done after all judges have submitted",
-          security: [{ bearerAuth: [] }],
-          requestBody: {
-            required: true,
-            content: {
-              "application/json": {
-                schema: {
-                  type: "object",
-                  required: ["sparId"],
-                  properties: { sparId: { type: "string", format: "uuid" } },
-                },
-              },
-            },
-          },
-          responses: {
-            "200": {
-              description: "Spar completed",
               content: {
                 "application/json": {
                   schema: {
