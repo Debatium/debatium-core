@@ -19,6 +19,8 @@ import { createSparsRouter } from "./routes/spars/spars.routes.js";
 import { createEvaluationRouter } from "./routes/spars/evaluation.routes.js";
 import { createNotificationsRouter } from "./routes/notifications/notifications.routes.js";
 import { createAdminRouter } from "./routes/admin/admin.routes.js";
+import { createWalletRouter } from "./routes/wallet/wallet.routes.js";
+import { createPaymentRouter } from "./routes/payment/payment.routes.js";
 
 export function createApp(config: AppConfig) {
   const app = express();
@@ -74,6 +76,8 @@ export function createApp(config: AppConfig) {
   app.use("/evaluations", createEvaluationRouter(config.isProd));
   app.use("/notifications", createNotificationsRouter(config.isProd));
   app.use("/admin", createAdminRouter(config.isProd));
+  app.use("/wallet", createWalletRouter(config.isProd));
+  app.use("/payment", createPaymentRouter());
 
   // Global error handler
   app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {

@@ -31,17 +31,19 @@ export async function runMigrations(customDbUrl?: string) {
   const client = await pool.connect();
 
   try {
-    // Create migration tracking table
+    // Create migration tracking table (idempotent with trial)
     await client.query(`
-      CREATE TABLE IF NOT EXISTS schema_migrations (
-        version VARCHAR(100) PRIMARY KEY,
-        applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
+      DO $$ BEGIN
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+          version VARCHAR(100) PRIMARY KEY,
+          applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      EXCEPTION WHEN duplicate_table OR duplicate_object THEN NULL; END $$;
     `);
 
     // Get already-applied migrations
     const { rows } = await client.query(
-      "SELECT version FROM schema_migrations"
+      "SELECT version FROM schema_migrations",
     );
     const applied = new Set(rows.map((r) => r.version));
 
@@ -57,7 +59,7 @@ export async function runMigrations(customDbUrl?: string) {
           if (!applied.has(v)) {
             await client.query(
               "INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING",
-              [v]
+              [v],
             );
             applied.add(v);
             console.log(`  ${v} already exists in DB, registered as applied.`);
@@ -87,15 +89,14 @@ export async function runMigrations(customDbUrl?: string) {
       await client.query(sql);
       await client.query(
         "INSERT INTO schema_migrations (version) VALUES ($1)",
-        [version]
+        [version],
       );
       console.log(`  ${version} OK`);
     }
 
     console.log("\nAll migrations applied successfully.");
   } catch (err) {
-    console.error("Migration failed:", err);
-    process.exit(1);
+    throw err;
   } finally {
     client.release();
     await pool.end();
@@ -103,5 +104,8 @@ export async function runMigrations(customDbUrl?: string) {
 }
 
 if (process.argv[1] && process.argv[1].endsWith("migrate.ts")) {
-  runMigrations();
+  runMigrations().catch((err) => {
+    console.error("Migration CLI failed:", err);
+    process.exit(1);
+  });
 }

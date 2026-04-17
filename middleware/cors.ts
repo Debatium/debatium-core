@@ -10,7 +10,7 @@ export function corsMiddleware(isProd: boolean) {
     const requestOrigin = req.headers.origin ?? "";
 
     const origin = isProd
-      ? "https://debatium.org"
+      ? "https://beta.debatium.org"
       : DEV_ORIGINS.includes(requestOrigin) ? requestOrigin : DEV_ORIGINS[0];
 
     res.header("Access-Control-Allow-Origin", origin);
