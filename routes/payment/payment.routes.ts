@@ -7,7 +7,7 @@ export function createPaymentRouter(): Router {
 
     router.post("/payos", async (req: Request, res: Response) => {
         try {
-            const webhookData = payOS.verifyPaymentWebhookData(req.body);
+            const webhookData = await payOS.webhooks.verify(req.body);
 
             if (["Ma giao dich thu nghiem", "VQRIO123"].includes(webhookData.description)) {
                 return res.json({ error: 0, message: "Ok", data: webhookData });

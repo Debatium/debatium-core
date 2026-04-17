@@ -224,6 +224,8 @@ export async function registerUserService(data: Record<string, unknown>): Promis
     institution,
     avatarUrl,
     calendarKey,
+    availableBalance: 0,
+    frozenBalance: 0,
   };
 
   const pool = getPool();

@@ -11,11 +11,6 @@ export default defineConfig({
       concurrent: false,
     },
     fileParallelism: false,
-    poolOptions: {
-      forks: {
-        singleFork: true,
-      },
-    },
     exclude: ["**/node_modules/**", "**/dist/**"],
   },
 });

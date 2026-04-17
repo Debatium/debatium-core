@@ -16,7 +16,7 @@ const configs: Record<string, AppConfig> = {
   dev: {
     isProd: false,
     port: parseInt(process.env.PORT || "4000", 10),
-    databaseUrl: "postgresql://user:password@localhost:5440/dev_db",
+    databaseUrl: process.env.DATABASE_URL || "postgresql://user:password@localhost:5440/dev_db",
     upstashRedisRestUrl: process.env.UPSTASH_REDIS_REST_URL || "",
     upstashRedisRestToken: process.env.UPSTASH_REDIS_REST_TOKEN || "",
     jwtAccessSecret: process.env.JWT_ACCESS_SECRET || "dev-access-secret",

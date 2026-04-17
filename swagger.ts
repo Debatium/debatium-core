@@ -125,8 +125,21 @@ const options: swaggerJsdoc.Options = {
             name: { type: "string" },
             time: { type: "string", example: "10/04/2026 20:00" },
             rule: { type: "string", enum: ["bp", "wsdc"] },
-            status: { type: "string", enum: ["created", "matching", "ready", "debating", "evaluating", "done", "cancelled"] },
-            expectedDebaterLevel: { type: "string", enum: ["novice", "open", "pro"] },
+            status: {
+              type: "string",
+              enum: [
+                "created",
+                "matching",
+                "ready",
+                "debating",
+                "done",
+                "cancelled",
+              ],
+            },
+            expectedDebaterLevel: {
+              type: "string",
+              enum: ["novice", "open", "pro"],
+            },
             expectedJudgeLevel: { type: "string", nullable: true },
             expectingJudge: { type: "boolean" },
             motion: { type: "string", nullable: true },
@@ -166,7 +179,6 @@ const options: swaggerJsdoc.Options = {
                 "INVITATION_RESTORED",
                 "BALLOT_SUBMITTED",
                 "FEEDBACK_SUBMITTED",
-                "ADMIN_ANNOUNCEMENT",
               ],
             },
             referenceId: { type: "string", format: "uuid", nullable: true },
@@ -435,60 +447,15 @@ const options: swaggerJsdoc.Options = {
             id: { type: "string", format: "uuid" },
             fullName: { type: "string" },
             username: { type: "string" },
-            email: { type: "string" },
-            role: { type: "string", enum: ["user", "admin"] },
+            email: { type: "string", format: "email" },
+            role: { type: "string", example: "user" },
             institution: { type: "string", nullable: true },
-            debaterLevel: { type: "string", enum: ["novice", "open", "pro"] },
-            judgeLevel: {
-              type: "string",
-              enum: ["novice", "intermediate", "advanced", "expert"],
-            },
-            debaterScore: { type: "number", example: 0 },
-            judgeScore: { type: "number", example: 0 },
-            avatarURL: { type: "string", example: "1" },
-            joinedAt: { type: "string", format: "date-time" },
-          },
-        },
-        AdminJudge: {
-          type: "object",
-          properties: {
-            id: { type: "string", format: "uuid" },
-            fullName: { type: "string" },
-            username: { type: "string" },
-            email: { type: "string" },
-            institution: { type: "string", nullable: true },
-            judgeLevel: {
-              type: "string",
-              enum: ["novice", "intermediate", "advanced", "expert"],
-            },
+            debaterLevel: { type: "string", nullable: true },
+            judgeLevel: { type: "string", nullable: true },
+            debaterScore: { type: "number" },
             judgeScore: { type: "number" },
             avatarURL: { type: "string" },
-            sparsJudged: {
-              type: "integer",
-              description: "Spars where the user is an accepted judge",
-            },
-            ballotsSubmitted: {
-              type: "integer",
-              description: "Spars where the user has submitted a ballot",
-            },
-          },
-        },
-        AdminUserSession: {
-          type: "object",
-          properties: {
-            id: { type: "string", format: "uuid" },
-            time: { type: "string", example: "10/04/2026 20:00" },
-            rule: { type: "string", enum: ["bp", "wsdc"] },
-            status: {
-              type: "string",
-              enum: ["created", "matching", "ready", "debating", "evaluating", "done", "cancelled"],
-            },
-            role: { type: "string", enum: ["debater", "judge", "observer"] },
-            ratingReceived: {
-              type: "number",
-              nullable: true,
-              description: "Avg feedback rating (only when the user was a judge)",
-            },
+            joinedAt: { type: "string", format: "date-time" },
           },
         },
         AdminUserDetail: {
@@ -500,11 +467,39 @@ const options: swaggerJsdoc.Options = {
                 totalSessions: { type: "integer" },
                 sessions: {
                   type: "array",
-                  items: { $ref: "#/components/schemas/AdminUserSession" },
+                  items: {
+                    type: "object",
+                    properties: {
+                      id: { type: "string", format: "uuid" },
+                      time: { type: "string", example: "10/04/2026 20:00" },
+                      rule: { type: "string", enum: ["bp", "wsdc"] },
+                      status: { type: "string" },
+                      role: {
+                        type: "string",
+                        enum: ["debater", "judge"],
+                      },
+                      ratingReceived: { type: "number", nullable: true },
+                    },
+                  },
                 },
               },
             },
           ],
+        },
+        AdminJudge: {
+          type: "object",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            fullName: { type: "string" },
+            username: { type: "string" },
+            email: { type: "string", format: "email" },
+            institution: { type: "string", nullable: true },
+            judgeLevel: { type: "string", nullable: true },
+            judgeScore: { type: "number" },
+            avatarURL: { type: "string" },
+            sparsJudged: { type: "integer" },
+            ballotsSubmitted: { type: "integer" },
+          },
         },
         AdminSpar: {
           type: "object",
@@ -525,7 +520,10 @@ const options: swaggerJsdoc.Options = {
                 "cancelled",
               ],
             },
-            expectedDebaterLevel: { type: "string", enum: ["novice", "open", "pro"] },
+            expectedDebaterLevel: {
+              type: "string",
+              enum: ["novice", "open", "pro"],
+            },
             expectedJudgeLevel: { type: "string", nullable: true },
             expectingJudge: { type: "boolean" },
             motion: { type: "string", nullable: true },
@@ -549,49 +547,32 @@ const options: swaggerJsdoc.Options = {
                 acceptedJudges: { type: "integer" },
               },
             },
-        Transaction: {
-          type: "object",
-          properties: {
-            id: { type: "string", format: "uuid" },
-            userId: { type: "string", format: "uuid" },
-            type: {
-              type: "string",
-              enum: ["top_up", "freeze", "release", "refund"],
-            },
-            status: {
-              type: "string",
-              enum: ["pending", "success", "failed", "cancelled"],
-            },
-            amountCoin: { type: "number", example: 50 },
-            amountVnd: { type: "number", nullable: true, example: 50000 },
-            orderCode: { type: "integer", nullable: true, example: 123456 },
-            checkoutUrl: {
-              type: "string",
-              nullable: true,
-              example: "https://pay.payos.vn/web/abc123",
-            },
-            createdAt: { type: "string", format: "date-time" },
-            updatedAt: { type: "string", format: "date-time" },
           },
         },
         WalletBalances: {
           type: "object",
           properties: {
-            availableBalance: {
-              type: "number",
-              example: 50,
-              description: "Coins available for spending",
+            free: { type: "integer", example: 100 },
+            locked: { type: "integer", example: 0 },
+            total: { type: "integer", example: 100 },
+          },
+        },
+        Transaction: {
+          type: "object",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            userId: { type: "string", format: "uuid" },
+            type: { type: "string", example: "top_up" },
+            status: {
+              type: "string",
+              enum: ["pending", "paid", "cancelled", "failed"],
             },
-            frozenBalance: {
-              type: "number",
-              example: 10,
-              description: "Coins locked for active spars",
-            },
-            pendingWithdrawal: {
-              type: "number",
-              example: 0,
-              description: "Coins in pending withdrawal requests (awaiting admin payout)",
-            },
+            amountCoin: { type: "integer" },
+            amountVnd: { type: "integer" },
+            orderCode: { type: "integer" },
+            providerRef: { type: "string", nullable: true },
+            createdAt: { type: "string", format: "date-time" },
+            updatedAt: { type: "string", format: "date-time" },
           },
         },
         WithdrawalRequest: {
@@ -599,17 +580,12 @@ const options: swaggerJsdoc.Options = {
           properties: {
             id: { type: "string", format: "uuid" },
             userId: { type: "string", format: "uuid" },
-            amountCoin: { type: "number", example: 20 },
-            amountVnd: { type: "number", example: 20000 },
+            amountCoin: { type: "integer" },
+            amountVnd: { type: "integer" },
             status: {
               type: "string",
-              enum: ["pending", "completed", "rejected"],
-              description: "pending → awaiting admin payout, completed → bank transfer done, rejected → admin declined",
+              enum: ["pending", "paid", "cancelled", "rejected"],
             },
-            idempotencyKey: { type: "string", format: "uuid" },
-            bankName: { type: "string", example: "Vietcombank" },
-            bankAccountNumber: { type: "string", example: "1234567890" },
-            bankAccountHolder: { type: "string", example: "NGUYEN VAN A" },
             createdAt: { type: "string", format: "date-time" },
             updatedAt: { type: "string", format: "date-time" },
           },
@@ -618,8 +594,16 @@ const options: swaggerJsdoc.Options = {
           type: "object",
           properties: {
             bankName: { type: "string", nullable: true, example: "Vietcombank" },
-            bankAccountNumber: { type: "string", nullable: true, example: "1234567890" },
-            bankAccountHolder: { type: "string", nullable: true, example: "NGUYEN VAN A" },
+            bankAccountNumber: {
+              type: "string",
+              nullable: true,
+              example: "1234567890",
+            },
+            bankAccountHolder: {
+              type: "string",
+              nullable: true,
+              example: "NGUYEN VAN A",
+            },
           },
         },
       },
@@ -2283,43 +2267,39 @@ const options: swaggerJsdoc.Options = {
           },
         },
       },
-
-      // ── Admin ──
-      "/admin/users": {
-        get: {
-          tags: ["Admin"],
-          summary: "List all users (admin only)",
+      "/auth/refresh": {
+        post: {
+          tags: ["Auth"],
+          summary: "Refresh access token using the refreshToken cookie",
           description:
-            "Returns every user in the system with profile and role data. " +
-            "Requires a JWT whose payload carries `role: \"admin\"`.",
-          security: [{ bearerAuth: [] }],
+            "Reads `refreshToken` from the HttpOnly cookie and issues a new `accessToken` cookie. No request body.",
           responses: {
             "200": {
-              description: "All users",
-      // ── Wallet ──
-      "/wallet/top-up": {
+              description: "Access token refreshed; new accessToken cookie set",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: { success: { type: "boolean", example: true } },
+                  },
+                },
+              },
+            },
+            "401": {
+              description: "Missing or invalid refresh token",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Error" },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/spars/start-debate": {
         post: {
-          tags: ["Wallet"],
-          summary: "Create a top-up checkout session",
-          description:
-            "Initiates a PayOS checkout session for the selected coin package. Returns a `checkoutUrl` that the frontend should redirect the user to.\n\n" +
-            "### Available Packages:\n" +
-            "| Package ID | Coins | Price (VND) |\n" +
-            "|------------|-------|-------------|\n" +
-            "| `PKG_50`   | 50    | 50,000      |\n" +
-            "| `PKG_100`  | 100   | 100,000     |\n" +
-            "| `PKG_200`  | 220   | 200,000     |\n" +
-            "| `PKG_500`  | 575   | 500,000     |\n\n" +
-            "The checkout link expires after **15 minutes**.\n\n" +
-            "### ⚠️ CRITICAL: Payment Confirmation Flow\n" +
-            "The PayOS webhook (`/payment/payos`) is **NOT operational in production** due to webhook URL registration failure. " +
-            "The **only** way to confirm and fulfill a payment is for the frontend to call `GET /wallet/transaction/{orderCode}` after the user returns from checkout. " +
-            "**The client MUST NOT close the browser window** before this call is made, or the payment will be lost (money debited but coins never credited).\n\n" +
-            "Recommended frontend flow:\n" +
-            "1. Call `POST /wallet/top-up` → get `checkoutUrl`\n" +
-            "2. Redirect user to `checkoutUrl` (PayOS payment page)\n" +
-            "3. PayOS redirects back to `returnUrl` with `orderCode`\n" +
-            "4. Frontend **immediately** calls `GET /wallet/transaction/{orderCode}` to sync and fulfill the payment",
+          tags: ["Spars"],
+          summary: "Host starts the debate (ready → debating)",
           security: [{ bearerAuth: [] }],
           requestBody: {
             required: true,
@@ -2327,22 +2307,129 @@ const options: swaggerJsdoc.Options = {
               "application/json": {
                 schema: {
                   type: "object",
-                  required: ["packageId"],
-                  properties: {
-                    packageId: {
-                      type: "string",
-                      enum: ["PKG_50", "PKG_100", "PKG_200", "PKG_500"],
-                      example: "PKG_50",
-                      description: "The coin package to purchase",
-                    },
-                  },
+                  required: ["sparId"],
+                  properties: { sparId: { type: "string", format: "uuid" } },
                 },
               },
             },
           },
           responses: {
             "200": {
-              description: "Checkout session created",
+              description: "Debate started",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: { message: { type: "string" } },
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Invalid state or validation error",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Error" },
+                },
+              },
+            },
+            "401": { description: "Not authenticated" },
+            "403": { description: "Not the host" },
+          },
+        },
+      },
+      "/spars/start-evaluation": {
+        post: {
+          tags: ["Spars"],
+          summary: "Host starts evaluation phase (debating → evaluating)",
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["sparId"],
+                  properties: { sparId: { type: "string", format: "uuid" } },
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "Evaluation phase started",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: { message: { type: "string" } },
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Invalid state or validation error",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Error" },
+                },
+              },
+            },
+            "401": { description: "Not authenticated" },
+            "403": { description: "Not the host" },
+          },
+        },
+      },
+      "/spars/complete": {
+        post: {
+          tags: ["Spars"],
+          summary: "Host marks spar done after all judges have submitted",
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["sparId"],
+                  properties: { sparId: { type: "string", format: "uuid" } },
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "Spar completed",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: { message: { type: "string" } },
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Invalid state or validation error",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Error" },
+                },
+              },
+            },
+            "401": { description: "Not authenticated" },
+            "403": { description: "Not the host" },
+          },
+        },
+      },
+      "/admin/users": {
+        get: {
+          tags: ["Admin"],
+          summary: "List all users (admin only)",
+          security: [{ bearerAuth: [] }],
+          responses: {
+            "200": {
+              description: "User list",
               content: {
                 "application/json": {
                   schema: {
@@ -2357,41 +2444,60 @@ const options: swaggerJsdoc.Options = {
                 },
               },
             },
-            "401": {
-              description: "Missing or invalid token",
+            "401": { description: "Not authenticated" },
+            "403": { description: "Not an admin" },
+          },
+        },
+      },
+      "/admin/users/search-email": {
+        get: {
+          tags: ["Admin"],
+          summary: "Search users by email prefix (admin only)",
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            {
+              name: "q",
+              in: "query",
+              required: false,
+              schema: { type: "string" },
+              description: "Email prefix to search; empty returns an empty list",
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Matching users (up to 8)",
               content: {
                 "application/json": {
-                  schema: { $ref: "#/components/schemas/Error" },
-                },
-              },
-            },
-            "403": {
-              description: "Caller is not an admin",
-                      checkoutUrl: {
-                        type: "string",
-                        example: "https://pay.payos.vn/web/abc123",
-                        description: "URL to redirect the user to for payment",
+                  schema: {
+                    type: "object",
+                    properties: {
+                      data: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          properties: {
+                            id: { type: "string", format: "uuid" },
+                            fullName: { type: "string" },
+                            username: { type: "string" },
+                            email: { type: "string", format: "email" },
+                            avatarURL: { type: "string" },
+                          },
+                        },
                       },
                     },
                   },
                 },
               },
             },
-            "400": {
-              description: "Invalid package ID",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/Error" },
-                },
-              },
-            },
+            "401": { description: "Not authenticated" },
+            "403": { description: "Not an admin" },
           },
         },
       },
       "/admin/users/{username}": {
         get: {
           tags: ["Admin"],
-          summary: "Get user detail + session history (admin only)",
+          summary: "Get user detail with session history (admin only)",
           security: [{ bearerAuth: [] }],
           parameters: [
             {
@@ -2415,203 +2521,24 @@ const options: swaggerJsdoc.Options = {
                 },
               },
             },
-            "401": {
-              description: "Missing or invalid token",
-              content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } },
-            },
-            "403": {
-              description: "Caller is not an admin",
-              content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } },
-            },
+            "401": { description: "Not authenticated" },
+            "403": { description: "Not an admin" },
             "404": {
               description: "User not found",
-              content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } },
-            },
-          },
-        },
-      },
-      "/admin/users/search-email": {
-        get: {
-          tags: ["Admin"],
-          summary: "Search users by email prefix (admin only)",
-          description: "Returns up to 8 users whose email starts with the given term. Intended for the admin Send-Notification typeahead.",
-          security: [{ bearerAuth: [] }],
-          parameters: [
-            {
-              name: "q",
-              in: "query",
-              required: true,
-              schema: { type: "string" },
-              description: "Email prefix",
-            "401": { description: "Not authenticated" },
-          },
-        },
-      },
-      "/wallet/balance": {
-        get: {
-          tags: ["Wallet"],
-          summary: "Get current wallet balances",
-          description:
-            "Returns the authenticated user's available and frozen coin balances.",
-          security: [{ bearerAuth: [] }],
-          responses: {
-            "200": {
-              description: "Current balances",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/WalletBalances" },
-                  example: {
-                    availableBalance: 50,
-                    frozenBalance: 10,
-                  },
-                },
-              },
-            },
-            "401": { description: "Not authenticated" },
-          },
-        },
-      },
-      "/wallet/transaction/{orderCode}": {
-        get: {
-          tags: ["Wallet"],
-          summary: "Get and sync transaction status (⚠️ CRITICAL)",
-          description:
-            "Fetches the local transaction record by `orderCode` and attempts to sync its status with PayOS.\n\n" +
-            "### ⚠️ CRITICAL — This Is The ONLY Way To Confirm Payments In Production\n" +
-            "Because the PayOS webhook (`/payment/payos`) is **not operational in production**, this endpoint is the **sole mechanism** for confirming that a payment was successful and crediting coins to the user's wallet. " +
-            "If the frontend does not call this endpoint after the user completes payment, the coins will **never** be credited even though the user's money has been debited.\n\n" +
-            "**The user MUST NOT close the browser window** between completing payment on the PayOS page and being redirected back to the app. " +
-            "The frontend should call this endpoint **immediately** upon return from the PayOS checkout redirect.\n\n" +
-            "### Sync Behavior:\n" +
-            "- If the local status is `pending`, the server queries PayOS for the live status.\n" +
-            "- If PayOS reports `PAID`, the transaction is fulfilled (coins credited) and status becomes `success`.\n" +
-            "- If PayOS reports `CANCELLED`, the status becomes `cancelled`.\n" +
-            "- If the local status is already `success`, `cancelled`, or `failed`, no sync is performed.",
-          security: [{ bearerAuth: [] }],
-          parameters: [
-            {
-              name: "orderCode",
-              in: "path",
-              required: true,
-              schema: { type: "integer" },
-              description: "The PayOS order code associated with the transaction",
-              example: 123456,
-            },
-          ],
-          responses: {
-            "200": {
-              description: "Matching users",
-              description: "Transaction status and optional PayOS info",
-              content: {
-                "application/json": {
-                  schema: {
-                    type: "object",
-                    properties: {
-                      data: {
-                        type: "array",
-                        items: {
-                          type: "object",
-                          properties: {
-                            id: { type: "string", format: "uuid" },
-                            fullName: { type: "string" },
-                            username: { type: "string" },
-                            email: { type: "string" },
-                            avatarURL: { type: "string" },
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "401": { description: "Missing or invalid token" },
-            "403": { description: "Caller is not an admin" },
-          },
-        },
-      },
-      "/admin/notifications": {
-        post: {
-          tags: ["Admin"],
-          summary: "Send an in-app notification to a single user (admin only)",
-          security: [{ bearerAuth: [] }],
-                      transaction: { $ref: "#/components/schemas/Transaction" },
-                      payosInfo: {
-                        type: "object",
-                        nullable: true,
-                        description: "Live PayOS payment data (null if already finalized or fetch failed)",
-                      },
-                    },
-                  },
-                  examples: {
-                    pendingSynced: {
-                      summary: "Pending transaction synced with PayOS (now success)",
-                      value: {
-                        transaction: {
-                          id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-                          userId: "d290f1ee-6c54-4b01-90e6-d701748f0851",
-                          type: "top_up",
-                          status: "success",
-                          amountCoin: 50,
-                          amountVnd: 50000,
-                          orderCode: 123456,
-                          checkoutUrl: "https://pay.payos.vn/web/abc123",
-                          createdAt: "2026-04-14T10:00:00.000Z",
-                          updatedAt: "2026-04-14T10:05:00.000Z",
-                        },
-                        payosInfo: { status: "PAID", orderCode: 123456 },
-                      },
-                    },
-                    alreadySuccess: {
-                      summary: "Already finalized transaction",
-                      value: {
-                        transaction: {
-                          id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-                          userId: "d290f1ee-6c54-4b01-90e6-d701748f0851",
-                          type: "top_up",
-                          status: "success",
-                          amountCoin: 50,
-                          amountVnd: 50000,
-                          orderCode: 123456,
-                          checkoutUrl: "https://pay.payos.vn/web/abc123",
-                          createdAt: "2026-04-14T10:00:00.000Z",
-                          updatedAt: "2026-04-14T10:05:00.000Z",
-                        },
-                        payosInfo: null,
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "400": {
-              description: "Transaction not found or unauthorized",
               content: {
                 "application/json": {
                   schema: { $ref: "#/components/schemas/Error" },
                 },
               },
             },
-            "401": { description: "Not authenticated" },
           },
         },
       },
-
-      // ── Withdrawal ──
-      "/wallet/withdraw": {
+      "/admin/notifications": {
         post: {
-          tags: ["Wallet"],
-          summary: "Request a coin withdrawal",
+          tags: ["Admin"],
+          summary: "Send an admin announcement notification to a user",
           security: [{ bearerAuth: [] }],
-          description:
-            "Creates a new withdrawal request. Moves `amountCoin` from `available_balance` to `pending_withdrawal`. " +
-            "Requires the user to have bank info saved first.\n\n" +
-            "**Rules:**\n" +
-            "- Minimum withdrawal: **10 coins** (= 10,000 VND)\n" +
-            "- Exchange rate: **1 Coin = 1,000 VND**\n" +
-            "- Bank info must be saved via `PUT /wallet/bank-info` before requesting\n" +
-            "- Coins are atomically moved from `available_balance` → `pending_withdrawal`\n" +
-            "- Admin processes the bank transfer, then calls `POST /wallet/confirm-withdrawal`",
           requestBody: {
             required: true,
             content: {
@@ -2625,51 +2552,43 @@ const options: swaggerJsdoc.Options = {
                     message: { type: "string", maxLength: 280 },
                   },
                 },
-                example: {
-                  targetUserId: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-                  title: "Scheduled Maintenance",
-                  message: "The platform will be down briefly tonight from 22:00 to 22:15 ICT.",
-                },
-                  required: ["amountCoin"],
-                  properties: {
-                    amountCoin: {
-                      type: "number",
-                      minimum: 10,
-                      example: 20,
-                      description: "Number of coins to withdraw (min 10)",
-                    },
-                  },
-                },
               },
             },
           },
           responses: {
             "201": {
-              description: "Notification created and delivered in-app",
+              description: "Notification created",
               content: {
                 "application/json": {
                   schema: {
                     type: "object",
                     properties: {
-                      data: { type: "object", properties: { id: { type: "string", format: "uuid", nullable: true } } },
+                      data: {
+                        type: "object",
+                        properties: { id: { type: "string", format: "uuid" } },
+                      },
                     },
                   },
-              description: "Withdrawal request created",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/WithdrawalRequest" },
                 },
               },
             },
             "400": {
-              description: "Validation error (missing fields or too long)",
-              content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } },
+              description: "Validation error",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Error" },
+                },
+              },
             },
-            "401": { description: "Missing or invalid token" },
-            "403": { description: "Caller is not an admin" },
+            "401": { description: "Not authenticated" },
+            "403": { description: "Not an admin" },
             "404": {
               description: "Target user not found",
-              content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } },
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Error" },
+                },
+              },
             },
           },
         },
@@ -2677,14 +2596,11 @@ const options: swaggerJsdoc.Options = {
       "/admin/judges": {
         get: {
           tags: ["Admin"],
-          summary: "List all users who have judged at least one spar (admin only)",
-          description:
-            "Returns users with at least one accepted `role: \"judge\"` spar membership, " +
-            "plus their `sparsJudged` count and `ballotsSubmitted` count.",
+          summary: "List users who have judged at least one spar (admin only)",
           security: [{ bearerAuth: [] }],
           responses: {
             "200": {
-              description: "Judges with stats",
+              description: "Judge list",
               content: {
                 "application/json": {
                   schema: {
@@ -2699,17 +2615,179 @@ const options: swaggerJsdoc.Options = {
                 },
               },
             },
-            "401": {
-              description: "Missing or invalid token",
+            "401": { description: "Not authenticated" },
+            "403": { description: "Not an admin" },
+          },
+        },
+      },
+      "/admin/spars": {
+        get: {
+          tags: ["Admin"],
+          summary: "List all spars with host and member counts (admin only)",
+          security: [{ bearerAuth: [] }],
+          responses: {
+            "200": {
+              description: "Spar list",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      data: {
+                        type: "array",
+                        items: { $ref: "#/components/schemas/AdminSpar" },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "401": { description: "Not authenticated" },
+            "403": { description: "Not an admin" },
+          },
+        },
+      },
+      "/wallet/top-up": {
+        post: {
+          tags: ["Wallet"],
+          summary: "Create a PayOS checkout session for a coin package",
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["packageId"],
+                  properties: {
+                    packageId: {
+                      type: "string",
+                      enum: ["PKG_50", "PKG_100", "PKG_200", "PKG_500"],
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "Checkout session URL",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      checkoutUrl: {
+                        type: "string",
+                        example: "https://pay.payos.vn/web/abc123",
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Invalid package ID",
               content: {
                 "application/json": {
                   schema: { $ref: "#/components/schemas/Error" },
                 },
               },
             },
-            "403": {
-              description: "Caller is not an admin",
-              description: "Validation error (insufficient balance, missing bank info, below minimum)",
+            "401": { description: "Not authenticated" },
+          },
+        },
+      },
+      "/wallet/balance": {
+        get: {
+          tags: ["Wallet"],
+          summary: "Get the caller's coin balances",
+          security: [{ bearerAuth: [] }],
+          responses: {
+            "200": {
+              description: "Coin balances",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/WalletBalances" },
+                },
+              },
+            },
+            "401": { description: "Not authenticated" },
+          },
+        },
+      },
+      "/wallet/transaction/{orderCode}": {
+        get: {
+          tags: ["Wallet"],
+          summary: "Get the status of one of the caller's transactions",
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            {
+              name: "orderCode",
+              in: "path",
+              required: true,
+              schema: { type: "integer" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Transaction status",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Transaction" },
+                },
+              },
+            },
+            "400": {
+              description: "Invalid orderCode",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Error" },
+                },
+              },
+            },
+            "401": { description: "Not authenticated" },
+            "404": {
+              description: "Transaction not found",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Error" },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/wallet/withdraw": {
+        post: {
+          tags: ["Wallet"],
+          summary: "Request a coin-to-VND withdrawal (minimum 10 coins)",
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["amountCoin"],
+                  properties: {
+                    amountCoin: { type: "integer", minimum: 10, example: 50 },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "201": {
+              description: "Withdrawal request created",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/WithdrawalRequest" },
+                },
+              },
+            },
+            "400": {
+              description: "Validation error or insufficient balance",
               content: {
                 "application/json": {
                   schema: { $ref: "#/components/schemas/Error" },
@@ -2723,12 +2801,11 @@ const options: swaggerJsdoc.Options = {
       "/wallet/withdrawals": {
         get: {
           tags: ["Wallet"],
-          summary: "List my withdrawal requests",
+          summary: "List the caller's withdrawal requests",
           security: [{ bearerAuth: [] }],
-          description: "Returns all withdrawal requests for the current user, ordered by most recent first.",
           responses: {
             "200": {
-              description: "List of withdrawal requests",
+              description: "Withdrawal list",
               content: {
                 "application/json": {
                   schema: {
@@ -2745,12 +2822,11 @@ const options: swaggerJsdoc.Options = {
       "/wallet/bank-info": {
         get: {
           tags: ["Wallet"],
-          summary: "Get my bank information",
+          summary: "Get the caller's saved bank details",
           security: [{ bearerAuth: [] }],
-          description: "Returns the current user's saved bank information for withdrawals. All fields are null if not yet configured.",
           responses: {
             "200": {
-              description: "Bank info",
+              description: "Bank details",
               content: {
                 "application/json": {
                   schema: { $ref: "#/components/schemas/BankInfo" },
@@ -2762,28 +2838,19 @@ const options: swaggerJsdoc.Options = {
         },
         put: {
           tags: ["Wallet"],
-          summary: "Update my bank information",
+          summary: "Update the caller's saved bank details",
           security: [{ bearerAuth: [] }],
-          description: "Save or update the bank details used for withdrawal payouts. All three fields are required.",
           requestBody: {
             required: true,
             content: {
               "application/json": {
-                schema: {
-                  type: "object",
-                  required: ["bankName", "bankAccountNumber", "bankAccountHolder"],
-                  properties: {
-                    bankName: { type: "string", example: "Vietcombank" },
-                    bankAccountNumber: { type: "string", example: "1234567890" },
-                    bankAccountHolder: { type: "string", example: "NGUYEN VAN A" },
-                  },
-                },
+                schema: { $ref: "#/components/schemas/BankInfo" },
               },
             },
           },
           responses: {
             "200": {
-              description: "Bank info updated",
+              description: "Updated bank details",
               content: {
                 "application/json": {
                   schema: { $ref: "#/components/schemas/BankInfo" },
@@ -2791,60 +2858,22 @@ const options: swaggerJsdoc.Options = {
               },
             },
             "400": {
-              description: "Validation error (missing fields)",
+              description: "Validation error",
               content: {
                 "application/json": {
                   schema: { $ref: "#/components/schemas/Error" },
                 },
               },
             },
-          },
-        },
-      },
-      "/admin/spars": {
-        get: {
-          tags: ["Admin"],
-          summary: "List all spars with status (admin only)",
-          description:
-            "Returns every spar — across all statuses (`created`, `matching`, `ready`, " +
-            "`debating`, `evaluating`, `done`, `cancelled`) — with host info and member counts.",
-          security: [{ bearerAuth: [] }],
-          responses: {
-            "200": {
-              description: "All spars",
-              content: {
-                "application/json": {
-                  schema: {
-                    type: "object",
-                    properties: {
-                      data: {
-                        type: "array",
-                        items: { $ref: "#/components/schemas/AdminSpar" },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "401": {
-              description: "Missing or invalid token",
             "401": { description: "Not authenticated" },
           },
         },
       },
       "/wallet/confirm-withdrawal": {
         post: {
-          tags: ["Wallet (Admin)"],
-          summary: "Admin: Confirm a withdrawal has been paid",
+          tags: ["Wallet"],
+          summary: "Mark a withdrawal as paid (admin operation)",
           security: [{ bearerAuth: [] }],
-          description:
-            "**Admin-only endpoint.** Called after the admin manually completes the bank transfer.\n\n" +
-            "This endpoint performs the following atomically in a transaction:\n" +
-            "1. Deducts `amount_coin` from the user's `pending_withdrawal` balance permanently\n" +
-            "2. Updates the withdrawal request status from `pending` → `completed`\n" +
-            "3. Creates an in-app notification (`WITHDRAWAL_COMPLETED`) for the user\n" +
-            "4. Sends a confirmation email to the user via Resend\n\n" +
-            "**Idempotency:** Will reject if the withdrawal is already completed or rejected.",
           requestBody: {
             required: true,
             content: {
@@ -2853,22 +2882,15 @@ const options: swaggerJsdoc.Options = {
                   type: "object",
                   required: ["withdrawalId"],
                   properties: {
-                    withdrawalId: {
-                      type: "string",
-                      format: "uuid",
-                      description: "The ID of the withdrawal request to confirm",
-                    },
+                    withdrawalId: { type: "string", format: "uuid" },
                   },
-                },
-                example: {
-                  withdrawalId: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
                 },
               },
             },
           },
           responses: {
             "200": {
-              description: "Withdrawal confirmed and user notified",
+              description: "Withdrawal confirmed",
               content: {
                 "application/json": {
                   schema: { $ref: "#/components/schemas/WithdrawalRequest" },
@@ -2876,83 +2898,45 @@ const options: swaggerJsdoc.Options = {
               },
             },
             "400": {
-              description: "Withdrawal not found or already processed",
+              description: "Validation error or wrong status",
               content: {
                 "application/json": {
                   schema: { $ref: "#/components/schemas/Error" },
                 },
               },
             },
-            "403": {
-              description: "Caller is not an admin",
+            "401": { description: "Not authenticated" },
+            "404": {
+              description: "Withdrawal not found",
               content: {
                 "application/json": {
                   schema: { $ref: "#/components/schemas/Error" },
-            "401": { description: "Not authenticated" },
+                },
+              },
+            },
           },
         },
       },
-
-      // ── Payment Webhooks ──
       "/payment/payos": {
         post: {
           tags: ["Payment"],
-          summary: "PayOS webhook receiver (⚠️ NOT OPERATIONAL IN PRODUCTION)",
-          deprecated: true,
+          summary: "PayOS webhook receiver",
           description:
-            "**⚠️ THIS ENDPOINT IS NOT OPERATIONAL IN PRODUCTION.** PayOS webhook URL registration has failed, so PayOS never calls this endpoint. " +
-            "The code is kept for future use if webhook registration is resolved.\n\n" +
-            "**In production, payment confirmation is handled entirely by the frontend calling `GET /wallet/transaction/{orderCode}` after checkout redirect.**\n\n" +
-            "### Intended Behavior (when operational):\n" +
-            "- Receives payment status callbacks from PayOS (server-to-server, not called by the frontend).\n" +
-            "- Verifies the webhook payload signature using the PayOS checksum key.\n" +
-            "- Skips test transactions (descriptions: `\"Ma giao dich thu nghiem\"`, `\"VQRIO123\"`).\n" +
-            "- If `webhookData.code === \"00\"` (success), calls `fulfillTransactionService` which:\n" +
-            "  1. Finds the pending transaction by `orderCode`.\n" +
-            "  2. Updates its status to `success`.\n" +
-            "  3. Credits `amountCoin` to the user's `available_balance`.\n" +
-            "- Always responds with `{ error: 0, message: \"Ok\" }` on success or `{ error: -1, message: \"fail\" }` on error.",
+            "Server-to-server webhook from PayOS. Verifies the signature and fulfils successful top-up transactions. Not called by clients.",
           requestBody: {
             required: true,
             content: {
               "application/json": {
                 schema: {
                   type: "object",
-                  description: "PayOS webhook payload (signed by PayOS)",
-                  properties: {
-                    code: {
-                      type: "string",
-                      example: "00",
-                      description: "Payment result code. '00' indicates success.",
-                    },
-                    desc: { type: "string", example: "success" },
-                    data: {
-                      type: "object",
-                      properties: {
-                        orderCode: { type: "integer", example: 123456 },
-                        amount: { type: "integer", example: 50000 },
-                        description: { type: "string", example: "Top up 50 coins" },
-                        accountNumber: { type: "string" },
-                        reference: { type: "string" },
-                        transactionDateTime: { type: "string" },
-                        currency: { type: "string", example: "VND" },
-                        paymentLinkId: { type: "string" },
-                        code: { type: "string", example: "00" },
-                        desc: { type: "string", example: "success" },
-                      },
-                    },
-                    signature: {
-                      type: "string",
-                      description: "HMAC signature for verification",
-                    },
-                  },
+                  description: "Signed PayOS webhook envelope",
                 },
               },
             },
           },
           responses: {
             "200": {
-              description: "Webhook processed",
+              description: "Webhook acknowledged (always 200; payload indicates outcome)",
               content: {
                 "application/json": {
                   schema: {
