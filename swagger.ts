@@ -166,6 +166,7 @@ const options: swaggerJsdoc.Options = {
                 "INVITATION_RESTORED",
                 "BALLOT_SUBMITTED",
                 "FEEDBACK_SUBMITTED",
+                "ADMIN_ANNOUNCEMENT",
               ],
             },
             referenceId: { type: "string", format: "uuid", nullable: true },
@@ -425,6 +426,128 @@ const options: swaggerJsdoc.Options = {
               type: "string",
               nullable: true,
               description: "Only present when isAnonymous = false",
+            },
+          },
+        },
+        AdminUser: {
+          type: "object",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            fullName: { type: "string" },
+            username: { type: "string" },
+            email: { type: "string" },
+            role: { type: "string", enum: ["user", "admin"] },
+            institution: { type: "string", nullable: true },
+            debaterLevel: { type: "string", enum: ["novice", "open", "pro"] },
+            judgeLevel: {
+              type: "string",
+              enum: ["novice", "intermediate", "advanced", "expert"],
+            },
+            debaterScore: { type: "number", example: 0 },
+            judgeScore: { type: "number", example: 0 },
+            avatarURL: { type: "string", example: "1" },
+            joinedAt: { type: "string", format: "date-time" },
+          },
+        },
+        AdminJudge: {
+          type: "object",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            fullName: { type: "string" },
+            username: { type: "string" },
+            email: { type: "string" },
+            institution: { type: "string", nullable: true },
+            judgeLevel: {
+              type: "string",
+              enum: ["novice", "intermediate", "advanced", "expert"],
+            },
+            judgeScore: { type: "number" },
+            avatarURL: { type: "string" },
+            sparsJudged: {
+              type: "integer",
+              description: "Spars where the user is an accepted judge",
+            },
+            ballotsSubmitted: {
+              type: "integer",
+              description: "Spars where the user has submitted a ballot",
+            },
+          },
+        },
+        AdminUserSession: {
+          type: "object",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            time: { type: "string", example: "10/04/2026 20:00" },
+            rule: { type: "string", enum: ["bp", "wsdc"] },
+            status: {
+              type: "string",
+              enum: ["created", "matching", "ready", "debating", "evaluating", "done", "cancelled"],
+            },
+            role: { type: "string", enum: ["debater", "judge", "observer"] },
+            ratingReceived: {
+              type: "number",
+              nullable: true,
+              description: "Avg feedback rating (only when the user was a judge)",
+            },
+          },
+        },
+        AdminUserDetail: {
+          allOf: [
+            { $ref: "#/components/schemas/AdminUser" },
+            {
+              type: "object",
+              properties: {
+                totalSessions: { type: "integer" },
+                sessions: {
+                  type: "array",
+                  items: { $ref: "#/components/schemas/AdminUserSession" },
+                },
+              },
+            },
+          ],
+        },
+        AdminSpar: {
+          type: "object",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            name: { type: "string" },
+            time: { type: "string", example: "10/04/2026 20:00" },
+            rule: { type: "string", enum: ["bp", "wsdc"] },
+            status: {
+              type: "string",
+              enum: [
+                "created",
+                "matching",
+                "ready",
+                "debating",
+                "evaluating",
+                "done",
+                "cancelled",
+              ],
+            },
+            expectedDebaterLevel: { type: "string", enum: ["novice", "open", "pro"] },
+            expectedJudgeLevel: { type: "string", nullable: true },
+            expectingJudge: { type: "boolean" },
+            motion: { type: "string", nullable: true },
+            createdAt: { type: "string", format: "date-time" },
+            host: {
+              type: "object",
+              nullable: true,
+              properties: {
+                id: { type: "string", format: "uuid" },
+                username: { type: "string" },
+                fullName: { type: "string" },
+              },
+            },
+            counts: {
+              type: "object",
+              properties: {
+                accepted: { type: "integer" },
+                pending: { type: "integer" },
+                invited: { type: "integer" },
+                acceptedDebaters: { type: "integer" },
+                acceptedJudges: { type: "integer" },
+              },
             },
           },
         },
@@ -2083,6 +2206,281 @@ const options: swaggerJsdoc.Options = {
                       },
                     },
                   },
+                },
+              },
+            },
+          },
+        },
+      },
+
+      // ── Admin ──
+      "/admin/users": {
+        get: {
+          tags: ["Admin"],
+          summary: "List all users (admin only)",
+          description:
+            "Returns every user in the system with profile and role data. " +
+            "Requires a JWT whose payload carries `role: \"admin\"`.",
+          security: [{ bearerAuth: [] }],
+          responses: {
+            "200": {
+              description: "All users",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      data: {
+                        type: "array",
+                        items: { $ref: "#/components/schemas/AdminUser" },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "401": {
+              description: "Missing or invalid token",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Error" },
+                },
+              },
+            },
+            "403": {
+              description: "Caller is not an admin",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Error" },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/admin/users/{username}": {
+        get: {
+          tags: ["Admin"],
+          summary: "Get user detail + session history (admin only)",
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            {
+              name: "username",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "User detail with session history",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      data: { $ref: "#/components/schemas/AdminUserDetail" },
+                    },
+                  },
+                },
+              },
+            },
+            "401": {
+              description: "Missing or invalid token",
+              content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } },
+            },
+            "403": {
+              description: "Caller is not an admin",
+              content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } },
+            },
+            "404": {
+              description: "User not found",
+              content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } },
+            },
+          },
+        },
+      },
+      "/admin/users/search-email": {
+        get: {
+          tags: ["Admin"],
+          summary: "Search users by email prefix (admin only)",
+          description: "Returns up to 8 users whose email starts with the given term. Intended for the admin Send-Notification typeahead.",
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            {
+              name: "q",
+              in: "query",
+              required: true,
+              schema: { type: "string" },
+              description: "Email prefix",
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Matching users",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      data: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          properties: {
+                            id: { type: "string", format: "uuid" },
+                            fullName: { type: "string" },
+                            username: { type: "string" },
+                            email: { type: "string" },
+                            avatarURL: { type: "string" },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "401": { description: "Missing or invalid token" },
+            "403": { description: "Caller is not an admin" },
+          },
+        },
+      },
+      "/admin/notifications": {
+        post: {
+          tags: ["Admin"],
+          summary: "Send an in-app notification to a single user (admin only)",
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["targetUserId", "title", "message"],
+                  properties: {
+                    targetUserId: { type: "string", format: "uuid" },
+                    title: { type: "string", maxLength: 80 },
+                    message: { type: "string", maxLength: 280 },
+                  },
+                },
+                example: {
+                  targetUserId: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+                  title: "Scheduled Maintenance",
+                  message: "The platform will be down briefly tonight from 22:00 to 22:15 ICT.",
+                },
+              },
+            },
+          },
+          responses: {
+            "201": {
+              description: "Notification created and delivered in-app",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      data: { type: "object", properties: { id: { type: "string", format: "uuid", nullable: true } } },
+                    },
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Validation error (missing fields or too long)",
+              content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } },
+            },
+            "401": { description: "Missing or invalid token" },
+            "403": { description: "Caller is not an admin" },
+            "404": {
+              description: "Target user not found",
+              content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } },
+            },
+          },
+        },
+      },
+      "/admin/judges": {
+        get: {
+          tags: ["Admin"],
+          summary: "List all users who have judged at least one spar (admin only)",
+          description:
+            "Returns users with at least one accepted `role: \"judge\"` spar membership, " +
+            "plus their `sparsJudged` count and `ballotsSubmitted` count.",
+          security: [{ bearerAuth: [] }],
+          responses: {
+            "200": {
+              description: "Judges with stats",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      data: {
+                        type: "array",
+                        items: { $ref: "#/components/schemas/AdminJudge" },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "401": {
+              description: "Missing or invalid token",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Error" },
+                },
+              },
+            },
+            "403": {
+              description: "Caller is not an admin",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Error" },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/admin/spars": {
+        get: {
+          tags: ["Admin"],
+          summary: "List all spars with status (admin only)",
+          description:
+            "Returns every spar — across all statuses (`created`, `matching`, `ready`, " +
+            "`debating`, `evaluating`, `done`, `cancelled`) — with host info and member counts.",
+          security: [{ bearerAuth: [] }],
+          responses: {
+            "200": {
+              description: "All spars",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      data: {
+                        type: "array",
+                        items: { $ref: "#/components/schemas/AdminSpar" },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "401": {
+              description: "Missing or invalid token",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Error" },
+                },
+              },
+            },
+            "403": {
+              description: "Caller is not an admin",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Error" },
                 },
               },
             },
