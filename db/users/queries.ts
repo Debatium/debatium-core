@@ -6,16 +6,17 @@ type DbClient = pg.Pool | pg.PoolClient;
 export async function insertUser(pool: DbClient, user: User): Promise<void> {
   await pool.query(
     `INSERT INTO users (
-      id, full_name, username, password, email,
+      id, full_name, username, password, email, role,
       debater_level, judge_level, debater_score, judge_score,
       institution, avatar_url, calendar_key
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
     [
       user.id,
       user.fullName.value,
       user.username.value,
       user.passwordHash,
       user.email.value,
+      user.role,
       user.debaterLevel,
       user.judgeLevel,
       user.debaterScore,
@@ -138,7 +139,7 @@ export async function getUserProfileData(
   userId: string
 ): Promise<Record<string, unknown> | null> {
   const { rows } = await pool.query(
-    `SELECT full_name, username, institution, debater_level, judge_level, email, avatar_url
+    `SELECT full_name, username, institution, debater_level, judge_level, email, avatar_url, role
      FROM users WHERE id = $1`,
     [userId]
   );
@@ -153,6 +154,7 @@ export async function getUserProfileData(
     judgeLevel: r.judge_level,
     email: r.email,
     avatarURL: String(r.avatar_url),
+    role: r.role ?? "user",
     tournamentEntries: [] as Record<string, unknown>[],
   };
 

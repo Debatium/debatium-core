@@ -11,7 +11,7 @@ import {
 } from "../../utils/jwt.js";
 import {
   FullName, Username, Email, Institution, Password, AvatarURL,
-  DebaterLevel, JudgeLevel,
+  DebaterLevel, JudgeLevel, UserRole,
   type User,
 } from "../../db/users/domain.js";
 import {
@@ -28,7 +28,7 @@ import {
 export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
-  user: { id: string; fullName: string; username: string; email: string; avatarURL: string };
+  user: { id: string; fullName: string; username: string; email: string; avatarURL: string; role: string };
 }
 
 // ── Login ──
@@ -40,7 +40,7 @@ export async function loginService(
   const pool = getPool();
 
   const result = await pool.query(
-    "SELECT id, password, full_name, username, email, avatar_url FROM users WHERE email = $1",
+    "SELECT id, password, full_name, username, email, avatar_url, role FROM users WHERE email = $1",
     [email]
   );
 
@@ -56,9 +56,11 @@ export async function loginService(
 
   const userId = String(user.id);
 
+  const role = user.role ?? "user";
+
   // Generate tokens
-  const accessToken = signAccessToken({ userId });
-  const refreshToken = signRefreshToken({ userId });
+  const accessToken = signAccessToken({ userId, role });
+  const refreshToken = signRefreshToken({ userId, role });
 
   // Store refresh token in Redis (invalidate old one)
   const redis = getRedis();
@@ -79,6 +81,7 @@ export async function loginService(
       username: user.username,
       email: user.email,
       avatarURL: String(user.avatar_url ?? "1"),
+      role,
     },
   };
 }
@@ -101,8 +104,13 @@ export async function refreshService(refreshToken: string): Promise<{ accessToke
     throw new ValueError("Invalid or expired refresh token.");
   }
 
+  // Fetch current role from DB (in case it changed since login)
+  const pool = getPool();
+  const { rows } = await pool.query("SELECT role FROM users WHERE id = $1", [payload.userId]);
+  const role = rows[0]?.role ?? "user";
+
   // Issue new access token
-  return { accessToken: signAccessToken({ userId: payload.userId }) };
+  return { accessToken: signAccessToken({ userId: payload.userId, role }) };
 }
 
 // ── Logout ──
@@ -208,6 +216,7 @@ export async function registerUserService(data: Record<string, unknown>): Promis
     username,
     passwordHash,
     email,
+    role: UserRole.USER,
     debaterLevel: DebaterLevel.NOVICE,
     judgeLevel: JudgeLevel.NOVICE,
     debaterScore: 0.0,

@@ -3,6 +3,11 @@ import { TournamentRule } from "../tournaments/domain.js";
 
 // ── Enums ──
 
+export enum UserRole {
+  USER = "user",
+  ADMIN = "admin",
+}
+
 export enum DebaterLevel {
   NOVICE = "novice",
   OPEN = "open",
@@ -86,6 +91,7 @@ export interface User {
   username: Username;
   passwordHash: string;
   email: Email;
+  role: UserRole;
   debaterLevel: DebaterLevel;
   judgeLevel: JudgeLevel;
   debaterScore: number;
