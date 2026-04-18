@@ -9,7 +9,7 @@ const SPAR_DURATION_MS = 90 * 60 * 1000; // 1.5 hours
 // Resend requires a verified domain. Use their test sender in dev.
 const FROM_EMAIL = config.isProd
   ? "Debatium <noreply@debatium.org>"
-  : "Debatium <onboarding@resend.dev>";
+  : "Debatium <noreply@debatium.org>";
 
 interface SparEmailData {
   sparId: string;
@@ -33,7 +33,10 @@ function formatDateTime(date: Date): string {
 }
 
 function toICSDateString(date: Date): string {
-  return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  return date
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}/, "");
 }
 
 function buildCalendarLinks(spar: SparEmailData) {
@@ -42,7 +45,7 @@ function buildCalendarLinks(spar: SparEmailData) {
 
   const title = encodeURIComponent(spar.sparName);
   const description = encodeURIComponent(
-    `Debate Spar: ${spar.sparName}\nRule: ${spar.rule.toUpperCase()}\nRole: ${spar.role}${spar.motion ? `\nMotion: ${spar.motion}` : ""}`
+    `Debate Spar: ${spar.sparName}\nRule: ${spar.rule.toUpperCase()}\nRole: ${spar.role}${spar.motion ? `\nMotion: ${spar.motion}` : ""}`,
   );
 
   // Google Calendar link
@@ -80,7 +83,7 @@ export async function sendSparInviteEmail(
   inviteeName: string,
   hostName: string,
   spar: SparEmailData,
-  isRegistered = true
+  isRegistered = true,
 ): Promise<void> {
   let resend: ReturnType<typeof getResend>;
   try {
@@ -130,10 +133,14 @@ export async function sendSparInviteEmail(
             <td style="color:#71717a;font-size:14px;padding:4px 0;">Your Role</td>
             <td style="color:#27272a;font-size:14px;padding:4px 0;text-transform:capitalize;">${spar.role}</td>
           </tr>
-          ${spar.motion ? `<tr>
+          ${
+            spar.motion
+              ? `<tr>
             <td style="color:#71717a;font-size:14px;padding:4px 0;vertical-align:top;">Motion</td>
             <td style="color:#27272a;font-size:14px;padding:4px 0;">${spar.motion}</td>
-          </tr>` : ""}
+          </tr>`
+              : ""
+          }
         </table>
       </div>
 
@@ -155,11 +162,12 @@ export async function sendSparInviteEmail(
       </div>
 
       <!-- CTA -->
-      ${isRegistered
-        ? `<p style="color:#27272a;font-size:14px;margin:0 0 8px;">
+      ${
+        isRegistered
+          ? `<p style="color:#27272a;font-size:14px;margin:0 0 8px;">
             Open Debatium to accept or decline this invitation.
           </p>`
-        : `<p style="color:#27272a;font-size:14px;margin:0 0 16px;">
+          : `<p style="color:#27272a;font-size:14px;margin:0 0 16px;">
             You've been invited to join a debate on Debatium. Sign up to participate!
           </p>
           <a href="https://debatium.org/register" target="_blank"
@@ -172,9 +180,11 @@ export async function sendSparInviteEmail(
     <!-- Footer -->
     <div style="padding:16px 32px;border-top:1px solid #e4e4e7;text-align:center;">
       <p style="color:#a1a1aa;font-size:12px;margin:0;">
-        ${isRegistered
-          ? "You received this email because you have an account on Debatium."
-          : "You received this email because someone invited you to a debate spar on Debatium."}
+        ${
+          isRegistered
+            ? "You received this email because you have an account on Debatium."
+            : "You received this email because someone invited you to a debate spar on Debatium."
+        }
       </p>
     </div>
   </div>
@@ -190,7 +200,10 @@ export async function sendSparInviteEmail(
     });
     logger.info({ toEmail, sparId: spar.sparId }, "Spar invite email sent");
   } catch (err) {
-    logger.error({ err, toEmail, sparId: spar.sparId }, "Failed to send spar invite email");
+    logger.error(
+      { err, toEmail, sparId: spar.sparId },
+      "Failed to send spar invite email",
+    );
   }
 }
 
