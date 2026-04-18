@@ -181,36 +181,52 @@ export async function getEvaluationDataService(userId: string, sparId: string): 
 
   const evaluation = await getEvaluationBySparId(pool, sparId);
   const ballotSubmitted = evaluation?.status === "submitted";
+  const noBallotMessage = "No ballot was submitted before the evaluation phase ended.";
+
+  const ballotData = ballotSubmitted
+    ? {
+        sparId: evaluation!.sparId,
+        judgeId: evaluation!.judgeId,
+        resultsJson: evaluation!.resultsJson,
+        placementsJson: evaluation!.placementsJson,
+        createdAt: evaluation!.updatedAt,
+      }
+    : null;
+
+  const sanitizeFeedbacks = (feedbacks: FeedbackEntry[]) => feedbacks.map((f: FeedbackEntry) => {
+    const rating = typeof f.rating === "string" ? parseFloat(f.rating) : f.rating;
+    if (f.isAnonymous) {
+      return { sparId, rating, comment: f.comment, isAnonymous: true, createdAt: f.createdAt };
+    }
+    return { ...f, rating };
+  });
 
   // HOST BRANCH
   if (member.is_host) {
-    if (spar.status === "evaluating") {
-      return { status: "evaluating", ballotSubmitted };
-    }
-    if (spar.status === "done" && ballotSubmitted) {
+    if (ballotSubmitted) {
       const feedbacks = evaluation!.feedbacksJson ?? [];
-      const sanitizedFeedbacks = feedbacks.map((f: FeedbackEntry) => {
-        const rating = typeof f.rating === "string" ? parseFloat(f.rating) : f.rating;
-        if (f.isAnonymous) {
-          return { sparId, rating, comment: f.comment, isAnonymous: true, createdAt: f.createdAt };
-        }
-        return { ...f, rating };
-      });
       return {
         status: "complete",
         ballotSubmitted: true,
-        feedbacks: sanitizedFeedbacks,
-        ballot: {
-          sparId: evaluation!.sparId,
-          judgeId: evaluation!.judgeId,
-          resultsJson: evaluation!.resultsJson,
-          placementsJson: evaluation!.placementsJson,
-          createdAt: evaluation!.updatedAt,
-        },
+        feedbacks: sanitizeFeedbacks(feedbacks),
+        ballot: ballotData,
       };
     }
-    // done but no ballot — judge never submitted during evaluation phase
-    return { status: "disabled", message: "The evaluation phase ended without a submitted ballot." };
+
+    if (spar.status === "done") {
+      return {
+        status: "complete",
+        ballotSubmitted: false,
+        message: noBallotMessage,
+        ballot: null,
+      };
+    }
+
+    if (spar.status === "evaluating") {
+      return { status: "evaluating", ballotSubmitted };
+    }
+
+    return { status: "disabled", message: "Evaluation is only available once the evaluation phase starts." };
   }
 
   // DEBATER BRANCH
@@ -222,20 +238,19 @@ export async function getEvaluationDataService(userId: string, sparId: string): 
     if (ballotSubmitted) {
       return {
         status: "complete",
-        ballot: {
-          sparId: evaluation!.sparId,
-          judgeId: evaluation!.judgeId,
-          resultsJson: evaluation!.resultsJson,
-          placementsJson: evaluation!.placementsJson,
-          createdAt: evaluation!.updatedAt,
-        },
+        ballot: ballotData,
         feedbackSubmitted,
       };
     }
 
     if (spar.status === "done") {
-      // Final done with no ballot means judge never submitted
-      return { status: "draw", message: "The judge did not submit a ballot. The match is scored as a draw." };
+      return {
+        status: "complete",
+        ballotSubmitted: false,
+        ballot: null,
+        message: noBallotMessage,
+        feedbackSubmitted,
+      };
     }
 
     // evaluating — waiting for judge
@@ -250,28 +265,20 @@ export async function getEvaluationDataService(userId: string, sparId: string): 
   if (role === "judge") {
     if (ballotSubmitted) {
       const feedbacks = evaluation!.feedbacksJson ?? [];
-      const sanitizedFeedbacks = feedbacks.map((f: FeedbackEntry) => {
-        const rating = typeof f.rating === "string" ? parseFloat(f.rating) : f.rating;
-        if (f.isAnonymous) {
-          return { sparId, rating, comment: f.comment, isAnonymous: true, createdAt: f.createdAt };
-        }
-        return { ...f, rating };
-      });
       return {
         status: "complete",
-        feedbacks: sanitizedFeedbacks,
-        ballot: {
-          sparId: evaluation!.sparId,
-          judgeId: evaluation!.judgeId,
-          resultsJson: evaluation!.resultsJson,
-          placementsJson: evaluation!.placementsJson,
-          createdAt: evaluation!.updatedAt,
-        },
+        feedbacks: sanitizeFeedbacks(feedbacks),
+        ballot: ballotData,
       };
     }
 
     if (spar.status === "done") {
-      return { status: "disabled", message: "The evaluation phase has ended without a submitted ballot." };
+      return {
+        status: "complete",
+        ballotSubmitted: false,
+        ballot: null,
+        message: noBallotMessage,
+      };
     }
 
     // evaluating — ballot not yet submitted

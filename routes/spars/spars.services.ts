@@ -703,28 +703,6 @@ export async function startEvaluationSparService(userId: string, data: Record<st
   await updateSparStatus(pool, sparId, "evaluating");
 }
 
-export async function completeSparService(userId: string, data: Record<string, unknown>): Promise<void> {
-  const sparId = data.sparId as string;
-  if (!sparId) throw new DomainValidationError("sparId is required");
-
-  await withTransaction(async (client) => {
-    const spar = await getSparById(client, sparId);
-    if (!spar) throw new DomainValidationError("Spar not found");
-    if (spar.status !== "evaluating") throw new DomainValidationError("Spar must be in the evaluating phase to be completed.");
-
-    const members = await getSparMembers(client, sparId);
-    const host = members.find(m => String(m.user_id) === userId && m.is_host);
-    if (!host) throw new DomainValidationError("Only the host can complete the spar.");
-
-    const evaluation = await getEvaluationBySparId(client, sparId);
-    if (!evaluation || evaluation.status !== "submitted") {
-      throw new DomainValidationError("Cannot complete the spar until all judges have submitted their ballot.");
-    }
-
-    await updateSparStatus(client, sparId, "done");
-  });
-}
-
 export async function cancelMatchingSparService(userId: string, data: Record<string, unknown>): Promise<void> {
   const sparId = data.sparId as string;
   if (!sparId) throw new DomainValidationError("sparId is required");
