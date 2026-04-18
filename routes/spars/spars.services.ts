@@ -168,6 +168,9 @@ export async function createSparService(
       }
     }
 
+    // Run auto-matching immediately on creation after manual invites are processed.
+    await client.query(`SELECT match_for_new_spar($1)`, [createdSparId]);
+
     return createdSparId;
   });
 }
@@ -354,6 +357,9 @@ export async function matchingRequestSparService(userId: string, data: Record<st
     const host = members.find(m => String(m.user_id) === userId && m.is_host);
     if (!host) throw new DomainValidationError("Only host can start matching");
     await updateSparStatus(client, sparId, "matching");
+
+    // Run auto-matching again when moving into matching status.
+    await client.query(`SELECT match_for_new_spar($1)`, [sparId]);
   });
 }
 
