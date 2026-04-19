@@ -5,6 +5,7 @@ import {
   insertTransaction,
   getTransactionByOrderCode,
   updateTransactionStatus,
+  getTransactionsByUserId,
 } from "../../db/transactions/queries.js";
 import {
   TransactionType,
@@ -187,6 +188,11 @@ export async function getTransactionStatusService(
   orderCode: number,
 ) {
   return syncTransactionStatusService(userId, orderCode);
+}
+
+export async function getTransactionHistoryService(userId: string) {
+  const pool = getPool();
+  return getTransactionsByUserId(pool, userId);
 }
 
 export async function fulfillTransactionService(
