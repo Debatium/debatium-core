@@ -4,6 +4,7 @@ import {
   createTopUpService,
   getUserBalancesService,
   getTransactionStatusService,
+  getTransactionHistoryService,
   requestWithdrawalService,
   getWithdrawalsService,
   getBankInfoService,
@@ -49,6 +50,19 @@ export function createWalletRouter(isProd: boolean): Router {
         const orderCode = Number(req.params.orderCode);
         const status = await getTransactionStatusService(req.userId!, orderCode);
         res.status(200).json(status);
+      } catch (err) {
+        next(err);
+      }
+    }
+  );
+
+  router.get(
+    "/history",
+    requireAuth(isProd),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const history = await getTransactionHistoryService(req.userId!);
+        res.status(200).json(history);
       } catch (err) {
         next(err);
       }

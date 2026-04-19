@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import { getPool } from "../../extensions/db.js";
 import { payOS } from "../../utils/payos.js";
-import { insertTransaction, getTransactionByOrderCode, updateTransactionStatus } from "../../db/transactions/queries.js";
+import { insertTransaction, getTransactionByOrderCode, updateTransactionStatus, getTransactionsByUserId } from "../../db/transactions/queries.js";
 import {
   TransactionType,
   TransactionStatus,
@@ -50,11 +50,11 @@ export async function createTopUpService(
       },
     ],
     cancelUrl: process.env.FRONTEND_URL
-      ? `${process.env.FRONTEND_URL}/wallet/cancel`
-      : `http://localhost:5173/wallet/cancel`,
+      ? `${process.env.FRONTEND_URL}/coins/cancel`
+      : `http://localhost:5173/coins/cancel`,
     returnUrl: process.env.FRONTEND_URL
-      ? `${process.env.FRONTEND_URL}/wallet/success`
-      : `http://localhost:5173/wallet/success`,
+      ? `${process.env.FRONTEND_URL}/coins/success`
+      : `http://localhost:5173/coins/success`,
     expiredAt,
   };
 
@@ -126,6 +126,11 @@ export async function syncTransactionStatusService(userId: string, orderCode: nu
 
 export async function getTransactionStatusService(userId: string, orderCode: number) {
   return syncTransactionStatusService(userId, orderCode);
+}
+
+export async function getTransactionHistoryService(userId: string) {
+  const pool = getPool();
+  return getTransactionsByUserId(pool, userId);
 }
 
 export async function fulfillTransactionService(orderCode: number): Promise<boolean> {
