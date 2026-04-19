@@ -45,7 +45,7 @@ export async function runMigrations(customDbUrl?: string) {
 
     // Get already-applied migrations
     const { rows } = await client.query(
-      "SELECT version FROM schema_migrations"
+      "SELECT version FROM schema_migrations",
     );
     const applied = new Set(rows.map((r) => r.version));
 
@@ -61,7 +61,7 @@ export async function runMigrations(customDbUrl?: string) {
           if (!applied.has(v)) {
             await client.query(
               "INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING",
-              [v]
+              [v],
             );
             applied.add(v);
             console.log(`  ${v} already exists in DB, registered as applied.`);
@@ -91,7 +91,7 @@ export async function runMigrations(customDbUrl?: string) {
       await client.query(sql);
       await client.query(
         "INSERT INTO schema_migrations (version) VALUES ($1)",
-        [version]
+        [version],
       );
       console.log(`  ${version} OK`);
     }
