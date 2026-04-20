@@ -7,7 +7,7 @@ import { DomainValidationError } from "../../db/exceptions.js";
 import { getUserProfileData, getPublicProfileData, searchUsersData } from "../../db/users/queries.js";
 import {
   updateUserService,
-  addUserAvailabilityService,
+  bulkAddUserAvailabilityService,
   updateUserAvailabilityService,
   deleteUserAvailabilityService,
   getUserCalendarService,
@@ -111,18 +111,19 @@ export function createUsersRouter(isProd: boolean): Router {
     }
   });
 
-  // POST /users/availability — Add availability from calendar response
+  // POST /users/availability/bulk — Create one availability profile with a slots[] array
   router.post(
-    "/availability",
+    "/availability/bulk",
     requireAuth(isProd),
-    validateJson([
-      "startDate", "endDate", "format", "roles",
-      "expectedJudgeLevel", "expectedDebaterLevel",
-    ]),
+    validateJson(["slots", "format", "roles", "expectedJudgeLevel", "expectedDebaterLevel"]),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
-        await addUserAvailabilityService(req.userId!, req.body);
-        res.status(201).json({ success: { message: "Availability added successfully" } });
+        const { count, id } = await bulkAddUserAvailabilityService(req.userId!, req.body);
+        res.status(201).json({
+          success: { message: `${count} availability slot(s) added successfully` },
+          id,
+          count,
+        });
       } catch (err) {
         const pgInfo = classifyPgError(err);
         if (pgInfo) return errorResponse(res, pgInfo.status, pgInfo.code, pgInfo.message);
@@ -131,32 +132,12 @@ export function createUsersRouter(isProd: boolean): Router {
     }
   );
 
-  // POST /users/calendar — Add availability
-  router.post(
-    "/calendar",
-    requireAuth(isProd),
-    validateJson([
-      "startDate", "endDate", "format", "roles",
-      "expectedJudgeLevel", "expectedDebaterLevel",
-    ]),
-    async (req: Request, res: Response, next: NextFunction) => {
-      try {
-        await addUserAvailabilityService(req.userId!, req.body);
-        res.status(201).json({ success: { message: "Availability added successfully" } });
-      } catch (err) {
-        const pgInfo = classifyPgError(err);
-        if (pgInfo) return errorResponse(res, pgInfo.status, pgInfo.code, pgInfo.message);
-        next(err);
-      }
-    }
-  );
-
-  // PUT /users/calendar — Update availability
+  // PUT /users/calendar — Update an availability profile (replaces slots[] + metadata)
   router.put(
     "/calendar",
     requireAuth(isProd),
     validateJson([
-      "id", "startDate", "endDate", "format", "roles",
+      "id", "slots", "format", "roles",
       "expectedJudgeLevel", "expectedDebaterLevel",
     ]),
     async (req: Request, res: Response, next: NextFunction) => {

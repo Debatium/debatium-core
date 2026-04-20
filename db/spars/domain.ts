@@ -49,7 +49,8 @@ export interface InviteMember {
 export interface SparWithMembers {
   id: string;
   name: string;
-  time: string;
+  startTime: string;
+  endTime: string;
   rule: string;
   status: string;
   expectedDebaterLevel: string;

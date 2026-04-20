@@ -123,7 +123,8 @@ const options: swaggerJsdoc.Options = {
           properties: {
             id: { type: "string" },
             name: { type: "string" },
-            time: { type: "string", example: "10/04/2026 20:00" },
+            startTime: { type: "string", example: "10/04/2026 20:00" },
+            endTime:   { type: "string", example: "10/04/2026 21:30" },
             rule: { type: "string", enum: ["bp", "wsdc"] },
             status: {
               type: "string",
@@ -203,13 +204,23 @@ const options: swaggerJsdoc.Options = {
             readAt: { type: "string", format: "date-time", nullable: true },
           },
         },
+        AvailabilitySlot: {
+          type: "object",
+          required: ["startDate", "endDate"],
+          properties: {
+            startDate: { type: "string", example: "10/03/2026 12:00" },
+            endDate: { type: "string", example: "10/03/2026 14:00" },
+          },
+        },
         Availability: {
           type: "object",
           properties: {
             id: { type: "string" },
             name: { type: "string" },
-            startDate: { type: "string", example: "10/03/2026 12:00" },
-            endDate: { type: "string", example: "10/03/2026 14:00" },
+            slots: {
+              type: "array",
+              items: { $ref: "#/components/schemas/AvailabilitySlot" },
+            },
             format: { type: "string", enum: ["bp", "wsdc"] },
             expectedJudgeLevel: { type: "string", nullable: true },
             expectedDebaterLevel: { type: "string", nullable: true },
@@ -471,7 +482,8 @@ const options: swaggerJsdoc.Options = {
                     type: "object",
                     properties: {
                       id: { type: "string", format: "uuid" },
-                      time: { type: "string", example: "10/04/2026 20:00" },
+                      startTime: { type: "string", example: "10/04/2026 20:00" },
+                      endTime:   { type: "string", example: "10/04/2026 21:30" },
                       rule: { type: "string", enum: ["bp", "wsdc"] },
                       status: { type: "string" },
                       role: {
@@ -506,7 +518,8 @@ const options: swaggerJsdoc.Options = {
           properties: {
             id: { type: "string", format: "uuid" },
             name: { type: "string" },
-            time: { type: "string", example: "10/04/2026 20:00" },
+            startTime: { type: "string", example: "10/04/2026 20:00" },
+            endTime:   { type: "string", example: "10/04/2026 21:30" },
             rule: { type: "string", enum: ["bp", "wsdc"] },
             status: {
               type: "string",
@@ -985,62 +998,9 @@ const options: swaggerJsdoc.Options = {
             },
           },
         },
-        post: {
-          tags: ["Calendar"],
-          summary: "Add availability slot",
-          security: [{ bearerAuth: [] }],
-          requestBody: {
-            required: true,
-            content: {
-              "application/json": {
-                schema: {
-                  type: "object",
-                  required: ["startDate", "endDate", "format", "roles"],
-                  properties: {
-                    startDate: { type: "string", example: "10/03/2026 12:00" },
-                    endDate: { type: "string", example: "10/03/2026 14:00" },
-                    format: { type: "string", enum: ["bp", "wsdc"] },
-                    roles: {
-                      type: "array",
-                      items: { type: "string", enum: ["debater", "judge"] },
-                    },
-                    expectedJudgeLevel: {
-                      type: "string",
-                      enum: ["novice", "intermediate", "advanced", "expert"],
-                      nullable: true,
-                    },
-                    expectedDebaterLevel: {
-                      type: "string",
-                      enum: ["novice", "open", "pro"],
-                      nullable: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-          responses: {
-            "201": {
-              description: "Availability added",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/Success" },
-                },
-              },
-            },
-            "400": {
-              description: "Validation error",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/Error" },
-                },
-              },
-            },
-          },
-        },
         put: {
           tags: ["Calendar"],
-          summary: "Update availability slot",
+          summary: "Update an availability profile (replaces slots and metadata)",
           security: [{ bearerAuth: [] }],
           requestBody: {
             required: true,
@@ -1051,8 +1011,10 @@ const options: swaggerJsdoc.Options = {
                   required: ["id"],
                   properties: {
                     id: { type: "string" },
-                    startDate: { type: "string" },
-                    endDate: { type: "string" },
+                    slots: {
+                      type: "array",
+                      items: { $ref: "#/components/schemas/AvailabilitySlot" },
+                    },
                     format: { type: "string", enum: ["bp", "wsdc"] },
                     roles: { type: "array", items: { type: "string" } },
                     expectedJudgeLevel: { type: "string", nullable: true },
@@ -1105,6 +1067,74 @@ const options: swaggerJsdoc.Options = {
           },
         },
       },
+      "/users/availability/bulk": {
+        post: {
+          tags: ["Calendar"],
+          summary: "Create an availability profile (one row containing many slots)",
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["slots", "format", "roles"],
+                  properties: {
+                    slots: {
+                      type: "array",
+                      minItems: 1,
+                      items: { $ref: "#/components/schemas/AvailabilitySlot" },
+                    },
+                    format: { type: "string", enum: ["bp", "wsdc"] },
+                    roles: {
+                      type: "array",
+                      items: { type: "string", enum: ["debater", "judge"] },
+                    },
+                    expectedJudgeLevel: {
+                      type: "string",
+                      enum: ["novice", "intermediate", "advanced", "expert"],
+                      nullable: true,
+                    },
+                    expectedDebaterLevel: {
+                      type: "string",
+                      enum: ["novice", "open", "pro"],
+                      nullable: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "201": {
+              description: "Availability profile created",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      success: {
+                        type: "object",
+                        properties: { message: { type: "string" } },
+                      },
+                      id: { type: "string" },
+                      count: { type: "integer" },
+                    },
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Validation error",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Error" },
+                },
+              },
+            },
+          },
+        },
+      },
       "/users/calendar-link": {
         get: {
           tags: ["Calendar"],
@@ -1147,13 +1177,18 @@ const options: swaggerJsdoc.Options = {
               "application/json": {
                 schema: {
                   type: "object",
-                  required: ["name", "time", "rule", "expectedDebaterLevel"],
+                  required: ["name", "startTime", "endTime", "rule", "expectedDebaterLevel"],
                   properties: {
                     name: { type: "string", example: "John's Spar" },
-                    time: {
+                    startTime: {
                       type: "string",
                       example: "10/04/2026 20:00",
                       description: "DD/MM/YYYY HH:MM",
+                    },
+                    endTime: {
+                      type: "string",
+                      example: "10/04/2026 21:30",
+                      description: "DD/MM/YYYY HH:MM, must be after startTime",
                     },
                     rule: {
                       type: "string",
@@ -1235,14 +1270,19 @@ const options: swaggerJsdoc.Options = {
               "application/json": {
                 schema: {
                   type: "object",
-                  required: ["sparId", "name", "time", "expectedDebaterLevel"],
+                  required: ["sparId", "name", "startTime", "endTime", "expectedDebaterLevel"],
                   properties: {
                     sparId: { type: "string" },
                     name: { type: "string" },
-                    time: {
+                    startTime: {
                       type: "string",
                       example: "10/04/2026 20:00",
                       description: "DD/MM/YYYY HH:MM",
+                    },
+                    endTime: {
+                      type: "string",
+                      example: "10/04/2026 21:30",
+                      description: "DD/MM/YYYY HH:MM, must be after startTime",
                     },
                     expectedDebaterLevel: {
                       type: "string",

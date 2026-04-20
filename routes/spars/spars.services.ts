@@ -122,10 +122,14 @@ export async function createSparService(
   userId: string,
   data: Record<string, unknown>
 ): Promise<string> {
-  const parsedTime = CustomDateTime.fromStr(data.time as string).value;
+  const parsedStart = CustomDateTime.fromStr(data.startTime as string).value;
+  const parsedEnd = CustomDateTime.fromStr(data.endTime as string).value;
+  if (parsedStart >= parsedEnd) {
+    throw new DomainValidationError("Spar end time must be after start time");
+  }
 
   const oneHourFromNow = new Date(Date.now() + 60 * 60 * 1000);
-  if (parsedTime < oneHourFromNow) {
+  if (parsedStart < oneHourFromNow) {
     throw new DomainValidationError("Spar start time must be at least 1 hour from now");
   }
   if (!data.expectedDebaterLevel) {
@@ -140,7 +144,8 @@ export async function createSparService(
   const sparData = {
     id: sparId,
     name: data.name,
-    time: parsedTime,
+    start_time: parsedStart,
+    end_time: parsedEnd,
     rule: data.rule ?? "wsdc",
     expected_debater_level: data.expectedDebaterLevel,
     expected_judge_level: data.expectedJudgeLevel ?? null,
@@ -165,7 +170,7 @@ export async function createSparService(
       const hostUser = await getUserById(client, userId);
       const resolvedInvites = await resolveAndInvite(client, createdSparId, userId, hostUser?.fullName ?? "A host", invites, {
         sparName: data.name as string,
-        sparTime: parsedTime,
+        sparTime: parsedStart,
         rule: (data.rule as string) ?? "wsdc",
         role: "debater",
         motion: (data.motion as string) ?? null,
@@ -191,9 +196,13 @@ export async function updateSparService(userId: string, data: Record<string, unk
   const sparId = data.sparId as string;
   if (!sparId) throw new DomainValidationError("sparId is required");
 
-  const parsedTime = CustomDateTime.fromStr(data.time as string).value;
+  const parsedStart = CustomDateTime.fromStr(data.startTime as string).value;
+  const parsedEnd = CustomDateTime.fromStr(data.endTime as string).value;
+  if (parsedStart >= parsedEnd) {
+    throw new DomainValidationError("Spar end time must be after start time");
+  }
   const oneHourFromNow = new Date(Date.now() + 60 * 60 * 1000);
-  if (parsedTime < oneHourFromNow) {
+  if (parsedStart < oneHourFromNow) {
     throw new DomainValidationError("Spar start time must be at least 1 hour from now");
   }
 
@@ -209,7 +218,8 @@ export async function updateSparService(userId: string, data: Record<string, unk
     await updateSpar(client, sparId, {
       name: data.name as string,
       motion: (data.motion as string) ?? null,
-      time: parsedTime,
+      startTime: parsedStart,
+      endTime: parsedEnd,
       expected_debater_level: data.expectedDebaterLevel as string,
       expected_judge_level: (data.expectedJudgeLevel as string) ?? null,
     });
@@ -306,7 +316,7 @@ export async function inviteUserSparService(userId: string, data: Record<string,
     if (!spar) throw new DomainValidationError("Spar not found");
     const hostUser = await getUserById(client, userId);
 
-    const sparTime = spar.time instanceof Date ? spar.time : new Date(spar.time as string);
+    const sparTime = spar.start_time instanceof Date ? spar.start_time : new Date(spar.start_time as string);
     const sparEmailData = {
       sparId,
       sparName: spar.name as string,

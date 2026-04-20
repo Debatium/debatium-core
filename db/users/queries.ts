@@ -235,31 +235,49 @@ export async function searchUsersData(
 
 // ── Availability queries ──
 
+function slotsJson(a: UserAvailability): string {
+  return JSON.stringify(
+    a.slots.map((s) => ({
+      s: s.start.value.toISOString(),
+      e: s.end.value.toISOString(),
+    }))
+  );
+}
+
+function formatDateTime(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function mapRowSlots(raw: unknown): Array<{ startDate: string; endDate: string }> {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((sl) => {
+    const s = sl as { s: string | Date; e: string | Date };
+    return {
+      startDate: formatDateTime(new Date(s.s as string)),
+      endDate: formatDateTime(new Date(s.e as string)),
+    };
+  });
+}
+
 export async function getUserCalendarData(
   pool: DbClient,
   userId: string
 ): Promise<Record<string, unknown>[]> {
   const { rows } = await pool.query(
-    `SELECT id, name, start_time, end_time, format, expected_judge_level, expected_debater_level, roles
+    `SELECT id, name, slots, format, expected_judge_level, expected_debater_level, roles
      FROM user_availabilities WHERE user_id = $1`,
     [userId]
   );
-  return rows.map((r) => {
-    const fmt = (d: Date) => {
-      const pad = (n: number) => String(n).padStart(2, "0");
-      return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    };
-    return {
-      id: String(r.id),
-      name: r.name,
-      startDate: fmt(r.start_time),
-      endDate: fmt(r.end_time),
-      format: r.format,
-      expectedJudgeLevel: r.expected_judge_level,
-      expectedDebaterLevel: r.expected_debater_level,
-      roles: r.roles,
-    };
-  });
+  return rows.map((r) => ({
+    id: String(r.id),
+    name: r.name,
+    slots: mapRowSlots(r.slots),
+    format: r.format,
+    expectedJudgeLevel: r.expected_judge_level,
+    expectedDebaterLevel: r.expected_debater_level,
+    roles: r.roles,
+  }));
 }
 
 export async function insertUserAvailability(
@@ -268,15 +286,14 @@ export async function insertUserAvailability(
 ): Promise<void> {
   await pool.query(
     `INSERT INTO user_availabilities (
-      id, user_id, name, start_time, end_time, format,
+      id, user_id, name, slots, format,
       expected_judge_level, expected_debater_level, roles
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    ) VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7,$8::jsonb)`,
     [
       a.id,
       a.userId,
       a.name,
-      a.startTime.value,
-      a.endTime.value,
+      slotsJson(a),
       a.format,
       a.expectedJudgeLevel ?? null,
       a.expectedDebaterLevel ?? null,
@@ -291,7 +308,7 @@ export async function getUserAvailability(
   userId: string
 ): Promise<Record<string, unknown> | null> {
   const { rows } = await pool.query(
-    `SELECT id, name, start_time, end_time, format, expected_judge_level, expected_debater_level, roles
+    `SELECT id, name, slots, format, expected_judge_level, expected_debater_level, roles
      FROM user_availabilities WHERE id = $1 AND user_id = $2`,
     [availabilityId, userId]
   );
@@ -300,8 +317,7 @@ export async function getUserAvailability(
   return {
     id: String(r.id),
     name: r.name,
-    start_time: r.start_time,
-    end_time: r.end_time,
+    slots: mapRowSlots(r.slots),
     format: r.format,
     expected_judge_level: r.expected_judge_level,
     expected_debater_level: r.expected_debater_level,
@@ -315,13 +331,12 @@ export async function updateUserAvailability(
 ): Promise<void> {
   await pool.query(
     `UPDATE user_availabilities
-     SET name = $1, start_time = $2, end_time = $3, format = $4,
-         expected_judge_level = $5, expected_debater_level = $6, roles = $7
-     WHERE id = $8 AND user_id = $9`,
+     SET name = $1, slots = $2::jsonb, format = $3,
+         expected_judge_level = $4, expected_debater_level = $5, roles = $6::jsonb
+     WHERE id = $7 AND user_id = $8`,
     [
       a.name,
-      a.startTime.value,
-      a.endTime.value,
+      slotsJson(a),
       a.format,
       a.expectedJudgeLevel ?? null,
       a.expectedDebaterLevel ?? null,

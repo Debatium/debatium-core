@@ -62,7 +62,7 @@ export async function getUserDetailAdmin(
   const userId = String(u.id);
 
   const { rows: sessionRows } = await pool.query(
-    `SELECT s.id, s.time, s.rule, s.status, sm.role,
+    `SELECT s.id, s.start_time, s.end_time, s.rule, s.status, sm.role,
             CASE
               WHEN sm.role = 'judge' THEN (
                 SELECT AVG((f->>'rating')::numeric)
@@ -74,7 +74,7 @@ export async function getUserDetailAdmin(
      FROM spar_members sm
      JOIN spars s ON s.id = sm.spar_id
      WHERE sm.user_id = $1 AND sm.status = 'accepted'
-     ORDER BY s.time DESC`,
+     ORDER BY s.start_time DESC`,
     [userId]
   );
 
@@ -84,7 +84,8 @@ export async function getUserDetailAdmin(
 
   const sessions = sessionRows.map((r) => ({
     id: String(r.id),
-    time: r.time instanceof Date ? fmt(r.time) : String(r.time),
+    startTime: r.start_time instanceof Date ? fmt(r.start_time) : String(r.start_time),
+    endTime: r.end_time instanceof Date ? fmt(r.end_time) : String(r.end_time),
     rule: r.rule,
     status: r.status,
     role: r.role,
@@ -138,7 +139,7 @@ export async function getAllJudgesAdmin(pool: DbClient): Promise<Record<string, 
 
 export async function getAllSparsAdmin(pool: DbClient): Promise<Record<string, unknown>[]> {
   const { rows } = await pool.query(
-    `SELECT s.id, s.name, s.time, s.rule, s.status,
+    `SELECT s.id, s.name, s.start_time, s.end_time, s.rule, s.status,
             s.expected_debater_level, s.expected_judge_level, s.expecting_judge,
             s.motion, s.created_at,
             host.id AS host_id, host.username AS host_username, host.full_name AS host_full_name,
@@ -162,7 +163,8 @@ export async function getAllSparsAdmin(pool: DbClient): Promise<Record<string, u
   return rows.map((r) => ({
     id: String(r.id),
     name: r.name,
-    time: r.time instanceof Date ? fmt(r.time) : String(r.time),
+    startTime: r.start_time instanceof Date ? fmt(r.start_time) : String(r.start_time),
+    endTime: r.end_time instanceof Date ? fmt(r.end_time) : String(r.end_time),
     rule: r.rule,
     status: r.status,
     expectedDebaterLevel: r.expected_debater_level,

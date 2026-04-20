@@ -146,12 +146,16 @@ export class AvailabilityRole {
   }
 }
 
+export interface AvailabilitySlot {
+  start: CustomDateTime;
+  end: CustomDateTime;
+}
+
 export interface UserAvailability {
   id: string;
   userId: string;
   name: string;
-  startTime: CustomDateTime;
-  endTime: CustomDateTime;
+  slots: AvailabilitySlot[];
   format: TournamentRule;
   expectedJudgeLevel: JudgeLevel | null;
   expectedDebaterLevel: DebaterLevel | null;
@@ -162,8 +166,19 @@ export function validateAvailability(a: UserAvailability): void {
   if (!a.name || !a.name.trim()) {
     throw new DomainValidationError("Availability name cannot be empty");
   }
-  if (a.startTime.value >= a.endTime.value) {
-    throw new DomainValidationError("Start time must be before end time");
+  if (!a.slots.length) {
+    throw new DomainValidationError("Slots must contain at least one time slot");
+  }
+  for (const s of a.slots) {
+    if (s.start.value >= s.end.value) {
+      throw new DomainValidationError("Each slot's start time must be before its end time");
+    }
+  }
+  const sorted = [...a.slots].sort((x, y) => x.start.value.getTime() - y.start.value.getTime());
+  for (let i = 1; i < sorted.length; i += 1) {
+    if (sorted[i].start.value < sorted[i - 1].end.value) {
+      throw new DomainValidationError("Availability slots must not overlap each other");
+    }
   }
   if (!a.roles.length) {
     throw new DomainValidationError("Roles must contain at least one role (e.g. debater or judge)");

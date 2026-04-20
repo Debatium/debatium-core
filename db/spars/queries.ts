@@ -6,30 +6,18 @@ type DbClient = pg.Pool | pg.PoolClient;
 export async function lazyManageSpars(pool: DbClient): Promise<void> {
   const now = new Date();
 
-  // Auto-complete evaluating spars once 3 hours have elapsed since spar start.
+  // Auto-complete evaluating spars 3h after they ended.
   await pool.query(
     `UPDATE spars
      SET status = 'done'
      WHERE status = 'evaluating'
-       AND time <= $1::timestamptz - INTERVAL '3 hours'`,
+       AND end_time <= $1::timestamptz - INTERVAL '3 hours'`,
     [now]
   );
 
-  // Release links for expired spars (time + 90 minutes)
-  // const { rows: expired } = await pool.query(
-  //   `SELECT id FROM spars WHERE status IN ('ready','debating') AND time <= $1::timestamptz - INTERVAL '90 minutes'`,
-  //   [now]
-  // );
-  // for (const { id } of expired) {
-  //   await pool.query(`SELECT * FROM evaluate_spar_readiness($1, $2)`, [id, now]);
-  // }
-
   // Trigger readiness check for created/matching spars entering the 15-minute window.
-  // ready → debating → evaluating remain host-controlled transitions.
-
-  // Trigger evaluation for spars entering the 15-minute window
   const { rows: trigger } = await pool.query(
-    `SELECT id FROM spars WHERE status IN ('created','matching') AND time <= $1::timestamptz + INTERVAL '15 minutes'`,
+    `SELECT id FROM spars WHERE status IN ('created','matching') AND start_time <= $1::timestamptz + INTERVAL '15 minutes'`,
     [now]
   );
   for (const { id } of trigger) {
@@ -43,9 +31,9 @@ export async function createSpar(
   hostData: Record<string, unknown>
 ): Promise<string> {
   const { rows } = await pool.query(
-    `INSERT INTO spars (id, name, time, rule, expected_debater_level, expected_judge_level, expecting_judge, motion, invite_members)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-    [sparData.id, sparData.name, sparData.time, sparData.rule,
+    `INSERT INTO spars (id, name, start_time, end_time, rule, expected_debater_level, expected_judge_level, expecting_judge, motion, invite_members)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+    [sparData.id, sparData.name, sparData.start_time, sparData.end_time, sparData.rule,
      sparData.expected_debater_level, sparData.expected_judge_level,
      sparData.expecting_judge ?? false, sparData.motion,
      JSON.stringify(sparData.invite_members ?? [])]
@@ -75,18 +63,21 @@ async function fetchSparsWithMembers(
 
   const sparMap = new Map<string, SparWithMembers>();
 
+  const fmt = (d: Date) => {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
   for (const row of rows) {
     const sparId = String(row.id);
     if (!sparMap.has(sparId)) {
-      const timeVal = row.time;
-      const fmt = (d: Date) => {
-        const pad = (n: number) => String(n).padStart(2, "0");
-        return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-      };
+      const startVal = row.start_time;
+      const endVal = row.end_time;
       sparMap.set(sparId, {
         id: sparId,
         name: row.name,
-        time: timeVal instanceof Date ? fmt(timeVal) : String(timeVal),
+        startTime: startVal instanceof Date ? fmt(startVal) : String(startVal),
+        endTime: endVal instanceof Date ? fmt(endVal) : String(endVal),
         rule: row.rule,
         status: row.status,
         expectedDebaterLevel: row.expected_debater_level,
@@ -118,13 +109,13 @@ async function fetchSparsWithMembers(
         status: row.member_status,
       });
 
-      // Show meet_link if requesting user is accepted and within time window
+      // Show meet_link if requesting user is accepted and we're in the [start-15m, end] window.
       if (userId && String(memberUserId) === String(userId) && row.member_status === "accepted" && row.status !== "cancelled") {
-        const sTime = row.time instanceof Date ? row.time : new Date(row.time);
+        const sStart = row.start_time instanceof Date ? row.start_time : new Date(row.start_time);
+        const sEnd = row.end_time instanceof Date ? row.end_time : new Date(row.end_time);
         const now = new Date();
-        const windowStart = new Date(sTime.getTime() - 15 * 60 * 1000);
-        const windowEnd = new Date(sTime.getTime() + 90 * 60 * 1000);
-        if (now >= windowStart && now <= windowEnd) {
+        const windowStart = new Date(sStart.getTime() - 15 * 60 * 1000);
+        if (now >= windowStart && now <= sEnd) {
           spar.meetLink = row.meet_link;
         }
       }
@@ -148,7 +139,7 @@ async function fetchSparsWithMembers(
 }
 
 const SPAR_SELECT = `
-  SELECT s.id, s.name, s.time, s.rule, s.status, s.expected_debater_level, s.expected_judge_level,
+  SELECT s.id, s.name, s.start_time, s.end_time, s.rule, s.status, s.expected_debater_level, s.expected_judge_level,
          s.expecting_judge, s.motion, s.meet_link, s.invite_members, s.created_at,
          u.id as user_id, u.full_name, u.username, u.email, u.avatar_url, u.judge_level, u.debater_level,
          sm.role, sm.is_host, sm.status as member_status
@@ -164,7 +155,7 @@ export async function getAvailableSpars(pool: DbClient, userId?: string): Promis
     query += ` AND s.id NOT IN (SELECT spar_id FROM spar_members WHERE user_id = $1)`;
     params.push(userId);
   }
-  query += ` ORDER BY s.time ASC`;
+  query += ` ORDER BY s.start_time ASC`;
   return fetchSparsWithMembers(pool, query, params, userId);
 }
 
@@ -173,7 +164,7 @@ export async function getMyActiveSpars(pool: DbClient, userId: string): Promise<
   const query = `${SPAR_SELECT}
     WHERE s.id IN (SELECT spar_id FROM spar_members WHERE user_id = $1 AND status IN ('pending','accepted','invited'))
       AND s.status IN ('created','matching','ready','debating','evaluating')
-    ORDER BY s.time ASC`;
+    ORDER BY s.start_time ASC`;
   return fetchSparsWithMembers(pool, query, [userId], userId);
 }
 
@@ -182,7 +173,7 @@ export async function getMyHistorySpars(pool: DbClient, userId: string): Promise
   const query = `${SPAR_SELECT}
     WHERE s.id IN (SELECT spar_id FROM spar_members WHERE user_id = $1 AND status = 'accepted')
       AND s.status IN ('done','cancelled')
-    ORDER BY s.time DESC`;
+    ORDER BY s.start_time DESC`;
   return fetchSparsWithMembers(pool, query, [userId], userId);
 }
 
@@ -212,11 +203,11 @@ export async function removeSparMember(pool: DbClient, sparId: string, userId: s
 export async function updateSpar(
   pool: DbClient,
   sparId: string,
-  data: { name: string; motion: string | null; time: Date; expected_debater_level: string; expected_judge_level: string | null }
+  data: { name: string; motion: string | null; startTime: Date; endTime: Date; expected_debater_level: string; expected_judge_level: string | null }
 ): Promise<void> {
   await pool.query(
-    `UPDATE spars SET name = $1, motion = $2, time = $3, expected_debater_level = $4, expected_judge_level = $5 WHERE id = $6`,
-    [data.name, data.motion, data.time, data.expected_debater_level, data.expected_judge_level, sparId]
+    `UPDATE spars SET name = $1, motion = $2, start_time = $3, end_time = $4, expected_debater_level = $5, expected_judge_level = $6 WHERE id = $7`,
+    [data.name, data.motion, data.startTime, data.endTime, data.expected_debater_level, data.expected_judge_level, sparId]
   );
 }
 

@@ -8,6 +8,7 @@ import {
   DebaterLevel, JudgeLevel, CustomDateTime, AvailabilityRole,
   validateAvailability,
   type UserAvailability,
+  type AvailabilitySlot,
 } from "../../db/users/domain.js";
 import {
   TournamentName, TournamentYear, TournamentScale, TournamentRule,
@@ -268,46 +269,86 @@ export async function getUserCalendarService(userId: string): Promise<Record<str
   return getUserCalendarData(pool, userId);
 }
 
-export async function addUserAvailabilityService(
-  userId: string,
-  data: Record<string, unknown>
-): Promise<void> {
-  const startTime = CustomDateTime.fromStr((data.startDate as string) ?? "");
-  const endTime = CustomDateTime.fromStr((data.endDate as string) ?? "");
+function parseSlotPairs(raw: unknown): AvailabilitySlot[] {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    throw new DomainValidationError("'slots' must be a non-empty array");
+  }
+  return raw.map((pair) => {
+    const p = pair as { startDate?: unknown; endDate?: unknown };
+    const start = CustomDateTime.fromStr(typeof p.startDate === "string" ? p.startDate : "");
+    const end = CustomDateTime.fromStr(typeof p.endDate === "string" ? p.endDate : "");
+    return { start, end };
+  });
+}
 
+function parseAvailabilityCommonFields(data: Record<string, unknown>): {
+  format: TournamentRule;
+  roles: AvailabilityRole[];
+  judgeLevel: JudgeLevel | null;
+  debaterLevel: DebaterLevel | null;
+} {
   const formatStr = (data.format as string) ?? "";
   if (!Object.values(TournamentRule).includes(formatStr as TournamentRule)) {
     throw new DomainValidationError(`Invalid format: ${formatStr}`);
   }
-  const tournamentFormat = formatStr as TournamentRule;
-
   const rolesList = (data.roles as string[]) ?? [];
   const roles = rolesList.map((r) => new AvailabilityRole(r));
-
   const judgeLevelVal = data.expectedJudgeLevel as string | undefined;
   const debaterLevelVal = data.expectedDebaterLevel as string | undefined;
-  const judgeLevel = judgeLevelVal ? (judgeLevelVal as JudgeLevel) : null;
-  const debaterLevel = debaterLevelVal ? (debaterLevelVal as DebaterLevel) : null;
+  return {
+    format: formatStr as TournamentRule,
+    roles,
+    judgeLevel: judgeLevelVal ? (judgeLevelVal as JudgeLevel) : null,
+    debaterLevel: debaterLevelVal ? (debaterLevelVal as DebaterLevel) : null,
+  };
+}
 
-  const rolesStr = rolesList.join("_");
+function buildAvailability(
+  id: string,
+  userId: string,
+  slots: AvailabilitySlot[],
+  format: TournamentRule,
+  roles: AvailabilityRole[],
+  judgeLevel: JudgeLevel | null,
+  debaterLevel: DebaterLevel | null,
+  existingName?: string
+): UserAvailability {
+  const rolesStr = roles.map((r) => r.value).join("_");
   const randInt = Math.floor(Math.random() * 9000) + 1000;
-  const name = `${formatStr}_${rolesStr}_${randInt}`;
-
+  const name = existingName ?? `${format}_${rolesStr}_${randInt}`;
   const availability: UserAvailability = {
-    id: uuidv6(),
+    id,
     userId,
     name,
-    startTime,
-    endTime,
-    format: tournamentFormat,
+    slots,
+    format,
     expectedJudgeLevel: judgeLevel,
     expectedDebaterLevel: debaterLevel,
     roles,
   };
   validateAvailability(availability);
+  return availability;
+}
 
-  const pool = getPool();
-  await insertUserAvailability(pool, availability);
+export async function bulkAddUserAvailabilityService(
+  userId: string,
+  data: Record<string, unknown>
+): Promise<{ count: number; id: string }> {
+  const slots = parseSlotPairs(data.slots);
+  const { format, roles, judgeLevel, debaterLevel } = parseAvailabilityCommonFields(data);
+
+  const availability = buildAvailability(
+    uuidv6(),
+    userId,
+    slots,
+    format,
+    roles,
+    judgeLevel,
+    debaterLevel
+  );
+
+  await insertUserAvailability(getPool(), availability);
+  return { count: slots.length, id: availability.id };
 }
 
 export async function updateUserAvailabilityService(
@@ -319,19 +360,16 @@ export async function updateUserAvailabilityService(
   const existing = await getUserAvailability(pool, availabilityId, userId);
   if (!existing) throw new DomainValidationError("Availability not found");
 
-  const updateFields = ["startDate", "endDate", "format", "expectedJudgeLevel", "expectedDebaterLevel", "roles"];
+  const updateFields = ["slots", "format", "expectedJudgeLevel", "expectedDebaterLevel", "roles"];
   const changes = updateFields.filter((f) => f in data);
   if (!changes.length) throw new DomainValidationError("At least one field must be provided for update");
 
-  const fmtDate = (d: Date) => {
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  };
-
-  const startTimeStr = (data.startDate as string) ?? fmtDate(existing.start_time as Date);
-  const endTimeStr = (data.endDate as string) ?? fmtDate(existing.end_time as Date);
-  const startTime = CustomDateTime.fromStr(startTimeStr);
-  const endTime = CustomDateTime.fromStr(endTimeStr);
+  const slots = "slots" in data
+    ? parseSlotPairs(data.slots)
+    : (existing.slots as Array<{ startDate: string; endDate: string }>).map((p) => ({
+        start: CustomDateTime.fromStr(p.startDate),
+        end: CustomDateTime.fromStr(p.endDate),
+      }));
 
   const formatStr = (data.format as string) ?? (existing.format as string);
   if (!Object.values(TournamentRule).includes(formatStr as TournamentRule)) {
@@ -347,25 +385,17 @@ export async function updateUserAvailabilityService(
   const judgeLevel = judgeLevelVal ? (judgeLevelVal as JudgeLevel) : null;
   const debaterLevel = debaterLevelVal ? (debaterLevelVal as DebaterLevel) : null;
 
-  let name = existing.name as string;
-  if ("format" in data || "roles" in data) {
-    const rolesStr = rolesList.join("_");
-    const randInt = Math.floor(Math.random() * 9000) + 1000;
-    name = `${formatStr}_${rolesStr}_${randInt}`;
-  }
-
-  const availability: UserAvailability = {
-    id: availabilityId,
+  const keepName = !("format" in data) && !("roles" in data);
+  const availability = buildAvailability(
+    availabilityId,
     userId,
-    name,
-    startTime,
-    endTime,
-    format: tournamentFormat,
-    expectedJudgeLevel: judgeLevel,
-    expectedDebaterLevel: debaterLevel,
+    slots,
+    tournamentFormat,
     roles,
-  };
-  validateAvailability(availability);
+    judgeLevel,
+    debaterLevel,
+    keepName ? (existing.name as string) : undefined
+  );
 
   await updateUserAvailability(pool, availability);
 }
