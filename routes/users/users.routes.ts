@@ -99,9 +99,15 @@ export function createUsersRouter(isProd: boolean): Router {
 
   // GET /users/:username — Public profile
   router.get("/:username", async (req: Request, res: Response, next: NextFunction) => {
+    // Reserved paths handled by specific routes below; fall through to them
+    // instead of treating "calendar" as a username and returning 404.
+    const username = String(req.params.username);
+    if (username === "calendar" || username === "calendar-link") {
+      return next();
+    }
     try {
       const pool = getPool();
-      const profile = await getPublicProfileData(pool, String(req.params.username));
+      const profile = await getPublicProfileData(pool, username);
       if (!profile) {
         return errorResponse(res, 404, ErrorCode.INVALID_FIELD_VALUE, "User not found");
       }
@@ -115,7 +121,7 @@ export function createUsersRouter(isProd: boolean): Router {
   router.post(
     "/availability/bulk",
     requireAuth(isProd),
-    validateJson(["slots", "format", "roles", "expectedJudgeLevel", "expectedDebaterLevel"]),
+    validateJson(["name", "slots", "format", "roles", "expectedJudgeLevel", "expectedDebaterLevel"]),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const { count, id } = await bulkAddUserAvailabilityService(req.userId!, req.body);
@@ -137,7 +143,7 @@ export function createUsersRouter(isProd: boolean): Router {
     "/calendar",
     requireAuth(isProd),
     validateJson([
-      "id", "slots", "format", "roles",
+      "id", "name", "slots", "format", "roles",
       "expectedJudgeLevel", "expectedDebaterLevel",
     ]),
     async (req: Request, res: Response, next: NextFunction) => {

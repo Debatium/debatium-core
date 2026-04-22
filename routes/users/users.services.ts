@@ -336,6 +336,8 @@ export async function bulkAddUserAvailabilityService(
 ): Promise<{ count: number; id: string }> {
   const slots = parseSlotPairs(data.slots);
   const { format, roles, judgeLevel, debaterLevel } = parseAvailabilityCommonFields(data);
+  const customName =
+    typeof data.name === "string" && data.name.trim() ? data.name.trim() : undefined;
 
   const availability = buildAvailability(
     uuidv6(),
@@ -344,7 +346,8 @@ export async function bulkAddUserAvailabilityService(
     format,
     roles,
     judgeLevel,
-    debaterLevel
+    debaterLevel,
+    customName,
   );
 
   await insertUserAvailability(getPool(), availability);
@@ -360,7 +363,7 @@ export async function updateUserAvailabilityService(
   const existing = await getUserAvailability(pool, availabilityId, userId);
   if (!existing) throw new DomainValidationError("Availability not found");
 
-  const updateFields = ["slots", "format", "expectedJudgeLevel", "expectedDebaterLevel", "roles"];
+  const updateFields = ["name", "slots", "format", "expectedJudgeLevel", "expectedDebaterLevel", "roles"];
   const changes = updateFields.filter((f) => f in data);
   if (!changes.length) throw new DomainValidationError("At least one field must be provided for update");
 
@@ -385,7 +388,13 @@ export async function updateUserAvailabilityService(
   const judgeLevel = judgeLevelVal ? (judgeLevelVal as JudgeLevel) : null;
   const debaterLevel = debaterLevelVal ? (debaterLevelVal as DebaterLevel) : null;
 
-  const keepName = !("format" in data) && !("roles" in data);
+  // Name precedence: explicit > preserved (when format/roles unchanged) > regenerate
+  let nameToUse: string | undefined;
+  if (typeof data.name === "string" && data.name.trim()) {
+    nameToUse = data.name.trim();
+  } else if (!("format" in data) && !("roles" in data)) {
+    nameToUse = existing.name as string;
+  }
   const availability = buildAvailability(
     availabilityId,
     userId,
@@ -394,7 +403,7 @@ export async function updateUserAvailabilityService(
     roles,
     judgeLevel,
     debaterLevel,
-    keepName ? (existing.name as string) : undefined
+    nameToUse,
   );
 
   await updateUserAvailability(pool, availability);
