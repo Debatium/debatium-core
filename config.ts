@@ -7,6 +7,7 @@ export interface AppConfig {
   jwtAccessSecret: string;
   jwtRefreshSecret: string;
   resendApiKey: string;
+  feUrl: string;
   logFilePath?: string;
 }
 
@@ -22,6 +23,7 @@ const configs: Record<string, AppConfig> = {
     jwtAccessSecret: process.env.JWT_ACCESS_SECRET || "dev-access-secret",
     jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || "dev-refresh-secret",
     resendApiKey: process.env.RESEND_API_KEY || "",
+    feUrl: process.env.FE_URL || "http://localhost:5173",
     logFilePath: process.env.LOG_FILE_PATH,
   },
   prod: {
@@ -33,6 +35,7 @@ const configs: Record<string, AppConfig> = {
     jwtAccessSecret: process.env.JWT_ACCESS_SECRET || "",
     jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || "",
     resendApiKey: process.env.RESEND_API_KEY || "",
+    feUrl: process.env.FE_URL || "",
     logFilePath: process.env.LOG_FILE_PATH,
   },
   testing: {
@@ -44,6 +47,7 @@ const configs: Record<string, AppConfig> = {
     jwtAccessSecret: process.env.JWT_ACCESS_SECRET || "test-access-secret",
     jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || "test-refresh-secret",
     resendApiKey: process.env.RESEND_API_KEY || "",
+    feUrl: process.env.FE_URL || "http://localhost:5173",
     logFilePath: process.env.LOG_FILE_PATH,
   },
 };

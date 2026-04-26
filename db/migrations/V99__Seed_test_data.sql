@@ -6,15 +6,15 @@ SET timezone = 'Asia/Bangkok';
 -- The migrate script will replace __HASHED_PASSWORD__ with the actual argon2 hash
 
 -- 8 test users with varying levels
-INSERT INTO users (id, full_name, username, password, email, debater_level, judge_level, institution, avatar_url) VALUES
-('1e7d6a00-0000-6000-8000-000000000001', 'Alice Johnson',   'alice_debater',   '__HASHED_PASSWORD__', 'alice@test.com',   'novice',  'novice',       'Oxford University',     1),
-('1e7d6a00-0000-6000-8000-000000000002', 'Bob Smith',       'bob_judge',       '__HASHED_PASSWORD__', 'bob@test.com',     'novice',  'novice',       'Cambridge University',  2),
-('1e7d6a00-0000-6000-8000-000000000003', 'Charlie Lee',     'charlie_pro',     '__HASHED_PASSWORD__', 'charlie@test.com', 'novice',  'novice',       'Harvard University',    3),
-('1e7d6a00-0000-6000-8000-000000000004', 'Diana Park',      'diana_open',      '__HASHED_PASSWORD__', 'diana@test.com',   'novice',  'novice',       'Stanford University',   4),
-('1e7d6a00-0000-6000-8000-000000000005', 'Ethan Brown',     'ethan_novice',    '__HASHED_PASSWORD__', 'ethan@test.com',   'novice',  'novice',       'Yale University',       5),
-('1e7d6a00-0000-6000-8000-000000000006', 'Fiona Chen',      'fiona_allround',  '__HASHED_PASSWORD__', 'fiona@test.com',   'novice',  'novice',       'MIT',                   6),
-('1e7d6a00-0000-6000-8000-000000000007', 'George Kim',      'george_wsdc',     '__HASHED_PASSWORD__', 'george@test.com',  'novice',  'novice',       'NUS',                   7),
-('1e7d6a00-0000-6000-8000-000000000008', 'Hannah Li',       'hannah_bp',       '__HASHED_PASSWORD__', 'hannah@test.com',  'novice',  'novice',       'Melbourne University',  8)
+INSERT INTO users (id, full_name, username, password, email, debater_level, judge_level, institution, avatar_url, email_verified) VALUES
+('1e7d6a00-0000-6000-8000-000000000001', 'Alice Johnson',   'alice_debater',   '__HASHED_PASSWORD__', 'alice@test.com',   'novice',  'novice',       'Oxford University',     1, true),
+('1e7d6a00-0000-6000-8000-000000000002', 'Bob Smith',       'bob_judge',       '__HASHED_PASSWORD__', 'bob@test.com',     'novice',  'novice',       'Cambridge University',  2, true),
+('1e7d6a00-0000-6000-8000-000000000003', 'Charlie Lee',     'charlie_pro',     '__HASHED_PASSWORD__', 'charlie@test.com', 'novice',  'novice',       'Harvard University',    3, true),
+('1e7d6a00-0000-6000-8000-000000000004', 'Diana Park',      'diana_open',      '__HASHED_PASSWORD__', 'diana@test.com',   'novice',  'novice',       'Stanford University',   4, true),
+('1e7d6a00-0000-6000-8000-000000000005', 'Ethan Brown',     'ethan_novice',    '__HASHED_PASSWORD__', 'ethan@test.com',   'novice',  'novice',       'Yale University',       5, true),
+('1e7d6a00-0000-6000-8000-000000000006', 'Fiona Chen',      'fiona_allround',  '__HASHED_PASSWORD__', 'fiona@test.com',   'novice',  'novice',       'MIT',                   6, true),
+('1e7d6a00-0000-6000-8000-000000000007', 'George Kim',      'george_wsdc',     '__HASHED_PASSWORD__', 'george@test.com',  'novice',  'novice',       'NUS',                   7, true),
+('1e7d6a00-0000-6000-8000-000000000008', 'Hannah Li',       'hannah_bp',       '__HASHED_PASSWORD__', 'hannah@test.com',  'novice',  'novice',       'Melbourne University',  8, true)
 ON CONFLICT (username) DO NOTHING;
 
 -- Tournaments (mix of BP and WSDC, different scales and years)

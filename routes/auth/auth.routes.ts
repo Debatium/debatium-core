@@ -2,7 +2,11 @@ import { Router, Request, Response, NextFunction } from "express";
 import { validateJson } from "../../middleware/validateJson.js";
 import { requireAuth } from "../../middleware/requireAuth.js";
 import { ErrorCode, errorResponse } from "../../utils/errors.js";
-import { loginService, logoutService, refreshService, registerUserService } from "./auth.services.js";
+import {
+  loginService, logoutService, refreshService, registerUserService,
+  verifyEmailService, resendVerificationService,
+  EmailNotVerifiedError, VerificationTokenInvalidError, VerificationTokenExpiredError,
+} from "./auth.services.js";
 
 export function createAuthRouter(isProd: boolean): Router {
   const router = Router();
@@ -17,10 +21,51 @@ export function createAuthRouter(isProd: boolean): Router {
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         await registerUserService(req.body);
-        res.status(201).json({ success: { message: "User has registered successfully" } });
+        res.status(201).json({
+          success: {
+            message: "Registration successful. Please check your email to verify your account.",
+          },
+        });
       } catch (err) {
         const pgInfo = classifyPgError(err);
         if (pgInfo) return errorResponse(res, pgInfo.status, pgInfo.code, pgInfo.message);
+        next(err);
+      }
+    }
+  );
+
+  // GET /auth/verify-email?token=...
+  router.get(
+    "/verify-email",
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const token = typeof req.query.token === "string" ? req.query.token : "";
+        await verifyEmailService(token);
+        res.status(200).json({ message: "Email verified successfully." });
+      } catch (err) {
+        if (err instanceof VerificationTokenExpiredError) {
+          return errorResponse(res, 410, ErrorCode.VERIFICATION_TOKEN_EXPIRED, err.message);
+        }
+        if (err instanceof VerificationTokenInvalidError) {
+          return errorResponse(res, 400, ErrorCode.VERIFICATION_TOKEN_INVALID, err.message);
+        }
+        next(err);
+      }
+    }
+  );
+
+  // POST /auth/resend-verification — always returns 200 to prevent enumeration
+  router.post(
+    "/resend-verification",
+    validateJson(["email"]),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        await resendVerificationService(req.body.email);
+        res.status(200).json({
+          message: "If an unverified account exists for that email, a new verification link has been sent.",
+        });
+      } catch (err) {
+        // Domain validation (e.g. malformed email) still bubbles up as 400 via the route error handler.
         next(err);
       }
     }
@@ -57,6 +102,9 @@ export function createAuthRouter(isProd: boolean): Router {
 
         res.status(200).json({ user });
       } catch (err) {
+        if (err instanceof EmailNotVerifiedError) {
+          return errorResponse(res, 403, ErrorCode.EMAIL_NOT_VERIFIED, err.message);
+        }
         next(err);
       }
     }

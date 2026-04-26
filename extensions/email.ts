@@ -290,3 +290,92 @@ export async function sendWithdrawalCompletedEmail(
   }
 }
 
+/**
+ * Send a verification email containing a single-use link to confirm the user's email address.
+ */
+export async function sendVerificationEmail(
+  toEmail: string,
+  fullName: string,
+  verificationUrl: string
+): Promise<void> {
+  let resend: ReturnType<typeof getResend>;
+  try {
+    resend = getResend();
+  } catch {
+    logger.warn("Resend not configured — skipping verification email");
+    return;
+  }
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+    <!-- Header -->
+    <div style="background:#18181b;padding:32px 32px 24px;text-align:center;">
+      <h1 style="color:#fff;margin:0;font-size:24px;font-weight:700;">Debatium</h1>
+    </div>
+
+    <!-- Body -->
+    <div style="padding:32px;">
+      <p style="color:#27272a;font-size:16px;margin:0 0 16px;">Hi ${fullName},</p>
+      <p style="color:#27272a;font-size:16px;margin:0 0 24px;">
+        Welcome to Debatium! Please confirm your email address to activate your account.
+      </p>
+
+      <!-- CTA -->
+      <div style="text-align:center;margin:0 0 24px;">
+        <a href="${verificationUrl}" target="_blank"
+           style="display:inline-block;padding:14px 32px;background:#18181b;color:#fff;text-decoration:none;border-radius:8px;font-size:15px;font-weight:600;">
+          Verify Email
+        </a>
+      </div>
+
+      <p style="color:#71717a;font-size:13px;margin:0 0 8px;">
+        Or copy and paste this link into your browser:
+      </p>
+      <p style="color:#52525b;font-size:13px;margin:0 0 24px;word-break:break-all;">
+        ${verificationUrl}
+      </p>
+
+      <p style="color:#a1a1aa;font-size:13px;margin:0;">
+        This link expires in 24 hours. If you did not create a Debatium account, you can safely ignore this email.
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div style="padding:16px 32px;border-top:1px solid #e4e4e7;text-align:center;">
+      <p style="color:#a1a1aa;font-size:12px;margin:0;">
+        You received this email because someone signed up for Debatium with this address.
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const text = `Hi ${fullName},
+
+Welcome to Debatium! Confirm your email by visiting:
+
+${verificationUrl}
+
+This link expires in 24 hours. If you did not create a Debatium account, you can ignore this email.`;
+
+  try {
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: toEmail,
+      subject: "Verify your Debatium account",
+      html,
+      text,
+    });
+    logger.info({ toEmail }, "Verification email sent");
+  } catch (err) {
+    logger.error({ err, toEmail }, "Failed to send verification email");
+  }
+}
+
