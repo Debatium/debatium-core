@@ -19,7 +19,15 @@ import {
   JudgeRounds, JudgeHighestRank, BreakingRank, Achievement, EntryRole,
   type Tournament, type JudgeDetails, type DebaterDetails,
 } from "../../db/tournaments/domain.js";
-import { insertUser } from "../../db/users/queries.js";
+import {
+  insertUser,
+  findUserByVerificationToken,
+  markUserEmailVerified,
+  getUserVerificationStatusByEmail,
+  rotateVerificationToken,
+} from "../../db/users/queries.js";
+import { sendVerificationEmail } from "../../extensions/email.js";
+import { getConfig } from "../../config.js";
 import {
   findTournament, insertTournament, insertJudgeDetails, insertDebaterDetails,
   insertTournamentEntry,
@@ -40,7 +48,7 @@ export async function loginService(
   const pool = getPool();
 
   const result = await pool.query(
-    "SELECT id, password, full_name, username, email, avatar_url, role FROM users WHERE email = $1",
+    "SELECT id, password, full_name, username, email, avatar_url, role, email_verified FROM users WHERE email = $1",
     [email]
   );
 
@@ -52,6 +60,10 @@ export async function loginService(
   const valid = await argon2.verify(user.password, password);
   if (!valid) {
     throw new ValueError("Invalid email or password.");
+  }
+
+  if (!user.email_verified) {
+    throw new EmailNotVerifiedError();
   }
 
   const userId = String(user.id);
@@ -197,6 +209,39 @@ async function processTournamentEntries(
   }
 }
 
+const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+const RESEND_VERIFICATION_TTL_SECONDS = 60; // 1/min per email
+
+function generateVerificationToken(): string {
+  return crypto.randomBytes(32).toString("hex");
+}
+
+function buildVerificationUrl(feUrl: string, token: string): string {
+  const base = feUrl.replace(/\/$/, "");
+  return `${base}/verify-email?token=${encodeURIComponent(token)}`;
+}
+
+export class EmailNotVerifiedError extends Error {
+  constructor() {
+    super("Please verify your email before logging in.");
+    this.name = "EmailNotVerifiedError";
+  }
+}
+
+export class VerificationTokenInvalidError extends Error {
+  constructor() {
+    super("This verification link is invalid.");
+    this.name = "VerificationTokenInvalidError";
+  }
+}
+
+export class VerificationTokenExpiredError extends Error {
+  constructor() {
+    super("This verification link has expired. Please request a new one.");
+    this.name = "VerificationTokenExpiredError";
+  }
+}
+
 export async function registerUserService(data: Record<string, unknown>): Promise<void> {
   const fullName = new FullName(data.fullName as string);
   const username = new Username(data.username as string);
@@ -209,6 +254,9 @@ export async function registerUserService(data: Record<string, unknown>): Promis
   const passwordHash = await hashPassword(password.value);
   const calendarKey = crypto.randomBytes(18).toString("base64url");
   const userId = uuidv6();
+
+  const verificationToken = generateVerificationToken();
+  const verificationTokenExpiresAt = new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS);
 
   const user: User = {
     id: userId,
@@ -226,6 +274,9 @@ export async function registerUserService(data: Record<string, unknown>): Promis
     calendarKey,
     availableBalance: 0,
     frozenBalance: 0,
+    emailVerified: false,
+    verificationToken,
+    verificationTokenExpiresAt,
   };
 
   const pool = getPool();
@@ -242,4 +293,60 @@ export async function registerUserService(data: Record<string, unknown>): Promis
   } finally {
     client.release();
   }
+
+  const config = getConfig();
+  const verificationUrl = buildVerificationUrl(config.feUrl, verificationToken);
+  await sendVerificationEmail(email.value, fullName.value, verificationUrl);
+}
+
+// ── Verify email ──
+
+export async function verifyEmailService(token: string): Promise<void> {
+  if (!token || typeof token !== "string") {
+    throw new VerificationTokenInvalidError();
+  }
+
+  const pool = getPool();
+  const record = await findUserByVerificationToken(pool, token);
+  if (!record) {
+    throw new VerificationTokenInvalidError();
+  }
+  if (record.emailVerified) {
+    // Token was already consumed; treat as invalid (single-use).
+    throw new VerificationTokenInvalidError();
+  }
+  if (!record.expiresAt || record.expiresAt.getTime() < Date.now()) {
+    throw new VerificationTokenExpiredError();
+  }
+
+  await markUserEmailVerified(pool, record.id);
+}
+
+// ── Resend verification ──
+
+export async function resendVerificationService(rawEmail: string): Promise<void> {
+  const email = new Email(rawEmail);
+
+  const redis = getRedis();
+  const rateKey = `resend-verify:${email.value}`;
+  const existing = await redis.get<string>(rateKey);
+  if (existing) {
+    // Rate-limited; silently no-op to prevent enumeration.
+    return;
+  }
+  await redis.set(rateKey, "1", { ex: RESEND_VERIFICATION_TTL_SECONDS });
+
+  const pool = getPool();
+  const user = await getUserVerificationStatusByEmail(pool, email.value);
+  if (!user || user.emailVerified) {
+    return;
+  }
+
+  const newToken = generateVerificationToken();
+  const expiresAt = new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS);
+  await rotateVerificationToken(pool, user.id, newToken, expiresAt);
+
+  const config = getConfig();
+  const verificationUrl = buildVerificationUrl(config.feUrl, newToken);
+  await sendVerificationEmail(email.value, user.fullName, verificationUrl);
 }

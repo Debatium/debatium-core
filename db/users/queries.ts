@@ -8,8 +8,9 @@ export async function insertUser(pool: DbClient, user: User): Promise<void> {
     `INSERT INTO users (
       id, full_name, username, password, email, role,
       debater_level, judge_level, debater_score, judge_score,
-      institution, avatar_url, calendar_key
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      institution, avatar_url, calendar_key,
+      email_verified, verification_token, verification_token_expires_at
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
     [
       user.id,
       user.fullName.value,
@@ -24,7 +25,72 @@ export async function insertUser(pool: DbClient, user: User): Promise<void> {
       user.institution?.value ?? null,
       user.avatarUrl.value,
       user.calendarKey,
+      user.emailVerified,
+      user.verificationToken,
+      user.verificationTokenExpiresAt,
     ]
+  );
+}
+
+export async function findUserByVerificationToken(
+  pool: DbClient,
+  token: string
+): Promise<{ id: string; emailVerified: boolean; expiresAt: Date | null } | null> {
+  const { rows } = await pool.query(
+    `SELECT id, email_verified, verification_token_expires_at
+     FROM users WHERE verification_token = $1`,
+    [token]
+  );
+  if (!rows[0]) return null;
+  return {
+    id: String(rows[0].id),
+    emailVerified: Boolean(rows[0].email_verified),
+    expiresAt: rows[0].verification_token_expires_at ?? null,
+  };
+}
+
+export async function markUserEmailVerified(
+  pool: DbClient,
+  userId: string
+): Promise<void> {
+  await pool.query(
+    `UPDATE users
+     SET email_verified = true,
+         verification_token = NULL,
+         verification_token_expires_at = NULL
+     WHERE id = $1`,
+    [userId]
+  );
+}
+
+export async function getUserVerificationStatusByEmail(
+  pool: DbClient,
+  email: string
+): Promise<{ id: string; fullName: string; emailVerified: boolean } | null> {
+  const { rows } = await pool.query(
+    `SELECT id, full_name, email_verified FROM users WHERE email = $1`,
+    [email]
+  );
+  if (!rows[0]) return null;
+  return {
+    id: String(rows[0].id),
+    fullName: rows[0].full_name,
+    emailVerified: Boolean(rows[0].email_verified),
+  };
+}
+
+export async function rotateVerificationToken(
+  pool: DbClient,
+  userId: string,
+  token: string,
+  expiresAt: Date
+): Promise<void> {
+  await pool.query(
+    `UPDATE users
+     SET verification_token = $1,
+         verification_token_expires_at = $2
+     WHERE id = $3 AND email_verified = false`,
+    [token, expiresAt, userId]
   );
 }
 
