@@ -101,6 +101,9 @@ export interface User {
   calendarKey: string | null;
   availableBalance: number;
   frozenBalance: number;
+  emailVerified: boolean;
+  verificationToken: string | null;
+  verificationTokenExpiresAt: Date | null;
 }
 
 // ── Availability ──
