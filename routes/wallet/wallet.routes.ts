@@ -19,9 +19,14 @@ export function createWalletRouter(isProd: boolean): Router {
     requireAuth(isProd),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
-        const { packageId } = req.body;
-        const checkoutUrl = await createTopUpService(req.userId!, packageId, isProd);
-        res.status(200).json({ checkoutUrl });
+        const { packageId, customAmountVnd } = req.body;
+        const payment = await createTopUpService(
+          req.userId!,
+          packageId,
+          isProd,
+          customAmountVnd === undefined ? undefined : Number(customAmountVnd),
+        );
+        res.status(200).json(payment);
       } catch (err) {
         next(err);
       }

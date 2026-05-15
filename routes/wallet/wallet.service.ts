@@ -45,6 +45,8 @@ const PACKAGES = {
   PKG_500: { coins: 575, price: 500000 },
 };
 
+const CUSTOM_COIN_RATE_VND = 1000;
+const CUSTOM_DISCOUNT_RATE = 0;
 const MIN_WITHDRAWAL = 10;
 const COIN_TO_VND = 1000;
 
@@ -52,9 +54,9 @@ export async function createTopUpService(
   userId: string,
   packageId: string,
   isProd: boolean,
-): Promise<string> {
-  const pkg = PACKAGES[packageId as keyof typeof PACKAGES];
-  if (!pkg) throw new DomainValidationError("Invalid package ID");
+  customAmountVnd?: number,
+): Promise<{ checkoutUrl: string; orderCode: number; expiredAt: number }> {
+  const pkg = resolveTopUpPackage(packageId, customAmountVnd);
 
   const orderCode = Number(String(Date.now()).slice(-6));
   const now = new Date();
@@ -77,8 +79,8 @@ export async function createTopUpService(
         price: pkg.price,
       },
     ],
-    cancelUrl: `${baseUrl}/wallet/cancel`,
-    returnUrl: `${baseUrl}/wallet/success`,
+    cancelUrl: `${baseUrl}/coins/cancel`,
+    returnUrl: `${baseUrl}/coins/success`,
     expiredAt,
   };
 
@@ -100,7 +102,34 @@ export async function createTopUpService(
   const pool = getPool();
   await insertTransaction(pool, transaction);
 
-  return paymentLinkRes.checkoutUrl;
+  return {
+    checkoutUrl: paymentLinkRes.checkoutUrl,
+    orderCode,
+    expiredAt,
+  };
+}
+
+function resolveTopUpPackage(
+  packageId: string,
+  customAmountVnd?: number,
+): { coins: number; price: number } {
+  if (customAmountVnd !== undefined) {
+    if (
+      !Number.isInteger(customAmountVnd) ||
+      customAmountVnd < CUSTOM_COIN_RATE_VND
+    ) {
+      throw new DomainValidationError("Invalid custom top-up amount");
+    }
+
+    return {
+      coins: Math.floor(customAmountVnd / CUSTOM_COIN_RATE_VND),
+      price: Math.round(customAmountVnd * (1 - CUSTOM_DISCOUNT_RATE)),
+    };
+  }
+
+  const pkg = PACKAGES[packageId as keyof typeof PACKAGES];
+  if (!pkg) throw new DomainValidationError("Invalid package ID");
+  return pkg;
 }
 
 export async function getUserBalancesService(userId: string) {
