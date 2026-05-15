@@ -66,14 +66,20 @@ export async function createNotification(
         const { getResend } = await import("../../extensions/resend.js");
         const resend = getResend();
         const config = getConfig();
-        const from = config.isProd ? "Debatium <noreply@debatium.org>" : "Debatium <onboarding@resend.dev>";
-        await resend.emails.send({
+        const from = process.env.RESEND_FROM_EMAIL || (config.isProd ? "Debatium <noreply@debatium.org>" : "Debatium <onboarding@resend.dev>");
+        const result = await resend.emails.send({
           from,
           to: opts.emailParams.toEmail,
           subject: opts.emailParams.subject,
           html: opts.emailParams.htmlContent,
         });
-        status = NotificationStatus.SENT;
+        if (result.error) {
+          logger.error({ err: result.error, toEmail: opts.emailParams.toEmail, from }, "Failed to send notification email");
+          status = NotificationStatus.FAILED;
+        } else {
+          logger.info({ toEmail: opts.emailParams.toEmail, emailId: result.data?.id }, "Notification email sent");
+          status = NotificationStatus.SENT;
+        }
       } catch (err) {
         logger.error({ err }, "Failed to send notification email");
         status = NotificationStatus.FAILED;
