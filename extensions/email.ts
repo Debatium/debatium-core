@@ -6,10 +6,7 @@ const config = getConfig();
 const logger = createLogger(config);
 
 const SPAR_DURATION_MS = 90 * 60 * 1000; // 1.5 hours
-// Resend requires a verified domain. Use their test sender in dev.
-const FROM_EMAIL = config.isProd
-  ? "Debatium <noreply@debatium.org>"
-  : "Debatium <noreply@debatium.org>";
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "Debatium <noreply@debatium.org>";
 
 interface SparEmailData {
   sparId: string;
@@ -192,13 +189,17 @@ export async function sendSparInviteEmail(
 </html>`;
 
   try {
-    await resend.emails.send({
+    const result = await resend.emails.send({
       from: FROM_EMAIL,
       to: toEmail,
       subject: `${hostName} invited you to spar: ${spar.sparName}`,
       html,
     });
-    logger.info({ toEmail, sparId: spar.sparId }, "Spar invite email sent");
+    if (result.error) {
+      logger.error({ err: result.error, toEmail, sparId: spar.sparId, from: FROM_EMAIL }, "Failed to send spar invite email");
+      return;
+    }
+    logger.info({ toEmail, sparId: spar.sparId, emailId: result.data?.id }, "Spar invite email sent");
   } catch (err) {
     logger.error(
       { err, toEmail, sparId: spar.sparId },
@@ -278,13 +279,17 @@ export async function sendWithdrawalCompletedEmail(
 </html>`;
 
   try {
-    await resend.emails.send({
+    const result = await resend.emails.send({
       from: FROM_EMAIL,
       to: toEmail,
       subject: `Withdrawal of ${formattedVnd} VND processed successfully`,
       html,
     });
-    logger.info({ toEmail, amountCoin, amountVnd }, "Withdrawal completed email sent");
+    if (result.error) {
+      logger.error({ err: result.error, toEmail, amountCoin, amountVnd, from: FROM_EMAIL }, "Failed to send withdrawal completed email");
+      return;
+    }
+    logger.info({ toEmail, amountCoin, amountVnd, emailId: result.data?.id }, "Withdrawal completed email sent");
   } catch (err) {
     logger.error({ err, toEmail }, "Failed to send withdrawal completed email");
   }
@@ -366,16 +371,19 @@ ${verificationUrl}
 This link expires in 24 hours. If you did not create a Debatium account, you can ignore this email.`;
 
   try {
-    await resend.emails.send({
+    const result = await resend.emails.send({
       from: FROM_EMAIL,
       to: toEmail,
       subject: "Verify your Debatium account",
       html,
       text,
     });
-    logger.info({ toEmail }, "Verification email sent");
+    if (result.error) {
+      logger.error({ err: result.error, toEmail, from: FROM_EMAIL }, "Failed to send verification email");
+      return;
+    }
+    logger.info({ toEmail, emailId: result.data?.id }, "Verification email sent");
   } catch (err) {
     logger.error({ err, toEmail }, "Failed to send verification email");
   }
 }
-
