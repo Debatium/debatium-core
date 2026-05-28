@@ -215,6 +215,24 @@ export async function updateSparService(userId: string, data: Record<string, unk
     const host = members.find(m => String(m.user_id) === userId && m.is_host);
     if (!host) throw new DomainValidationError("Only host can edit the spar");
 
+    const { rows: overlapRows } = await client.query(`
+      SELECT 1
+      FROM spar_members sm
+      JOIN spar_members sm_overlap ON sm_overlap.user_id = sm.user_id
+      JOIN spars s_overlap ON s_overlap.id = sm_overlap.spar_id
+      WHERE sm.spar_id = $1
+        AND sm.status = 'accepted'
+        AND sm_overlap.status = 'accepted'
+        AND s_overlap.id <> $1
+        AND s_overlap.status NOT IN ('cancelled', 'done')
+        AND (s_overlap.start_time, s_overlap.end_time) OVERLAPS ($2::TIMESTAMPTZ, $3::TIMESTAMPTZ)
+      LIMIT 1
+    `, [sparId, parsedStart, parsedEnd]);
+
+    if (overlapRows.length > 0) {
+      throw new DomainValidationError("The provided time slot overlaps with another spar for one or more accepted members.");
+    }
+
     await updateSpar(client, sparId, {
       name: data.name as string,
       motion: (data.motion as string) ?? null,
