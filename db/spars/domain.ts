@@ -29,6 +29,7 @@ export interface SparMemberDetails {
   avatarURL: number | string;
   judgeLevel: string;
   debaterLevel: string;
+  institution: string | null;
   role: string;
   isHost: boolean;
   status: string;

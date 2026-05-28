@@ -8,8 +8,9 @@ import {
   createSpar, getAvailableSpars, getMyActiveSpars, getMyHistorySpars,
   getSparById, getSparMembers, insertSparMember, upsertSparMember,
   removeSparMember, updateSpar, updateSparStatus, updateSparHost, updateInviteMemberResponse,
+  getSparDetails,
 } from "../../db/spars/queries.js";
-import { getUserById, getUserByUsername, getUserByEmail } from "../../db/users/queries.js";
+import { getUserById, getUserByUsername, getUserByEmail, getUserProfileData } from "../../db/users/queries.js";
 import { getEvaluationBySparId } from "../../db/spars/evaluation.queries.js";
 import { sendSparInviteEmail } from "../../extensions/email.js";
 import { NotificationEventType } from "../../db/notifications/domain.js";
@@ -745,5 +746,49 @@ export async function cancelMatchingSparService(userId: string, data: Record<str
     if (!host) throw new DomainValidationError("Only host can cancel matching");
 
     await updateSparStatus(client, sparId, "created");
+  });
+}
+
+export async function getSparDetailsService(userId: string | undefined, sparId: string): Promise<SparWithMembers | null> {
+  const pool = getPool();
+  const spar = await getSparDetails(pool, sparId, userId);
+  if (!spar) return null;
+
+  if (userId) {
+    spar.isHost = spar.members.some(m => m.userId === userId && m.isHost);
+    if (spar.isHost) {
+      spar.notifications = spar.members.filter(m => m.status === "pending");
+    } else {
+      spar.notifications = spar.members.filter(m => m.status === "invited" && m.userId === userId);
+    }
+  }
+
+  // Fetch judge achievements if an accepted judge exists
+  const judgeMember = spar.members.find(m => m.role === "judge" && m.status === "accepted");
+  if (judgeMember) {
+    const profile = await getUserProfileData(pool, judgeMember.userId);
+    (judgeMember as any).tournamentEntries = profile?.tournamentEntries || [];
+  }
+
+  return spar;
+}
+
+export async function updateSparMotionService(userId: string, sparId: string, motion: string): Promise<void> {
+  await withTransaction(async (client) => {
+    const spar = await getSparById(client, sparId);
+    if (!spar) throw new DomainValidationError("Spar not found");
+
+    const members = await getSparMembers(client, sparId);
+    const isHostOrJudge = members.some(
+      m => String(m.user_id) === userId && (m.is_host || (m.role === "judge" && m.status === "accepted"))
+    );
+    if (!isHostOrJudge) {
+      throw new DomainValidationError("Only the host or accepted judge can update the motion");
+    }
+
+    await client.query(
+      `UPDATE spars SET motion = $1 WHERE id = $2`,
+      [motion ? motion.trim() : null, sparId]
+    );
   });
 }
