@@ -13,9 +13,8 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "baseUrl": ".",
     "paths": {
-      "@db/*": ["db/*"]
+      "@db/*": ["./db/*"]
     }
   },
   "include": ["**/*"],
