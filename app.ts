@@ -81,6 +81,26 @@ export function createApp(config: AppConfig) {
 
   // Global error handler
   app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+    if (err.name === "DomainValidationError") {
+      res.status(400).json({
+        error: {
+          code: ErrorCode.INVALID_FIELD_VALUE,
+          message: err.message,
+        },
+      });
+      return;
+    }
+
+    if (err.name === "PermissionDeniedError") {
+      res.status(403).json({
+        error: {
+          code: ErrorCode.FORBIDDEN,
+          message: err.message,
+        },
+      });
+      return;
+    }
+
     logger.error(err, "An unexpected error occurred");
     res.status(500).json({
       error: {
