@@ -104,6 +104,7 @@ async function fetchSparsWithMembers(
         avatarURL: row.avatar_url,
         judgeLevel: row.judge_level,
         debaterLevel: row.debater_level,
+        institution: row.institution,
         role: row.role,
         isHost: row.is_host,
         status: row.member_status,
@@ -141,7 +142,7 @@ async function fetchSparsWithMembers(
 const SPAR_SELECT = `
   SELECT s.id, s.name, s.start_time, s.end_time, s.rule, s.status, s.expected_debater_level, s.expected_judge_level,
          s.expecting_judge, s.motion, s.meet_link, s.invite_members, s.created_at,
-         u.id as user_id, u.full_name, u.username, u.email, u.avatar_url, u.judge_level, u.debater_level,
+         u.id as user_id, u.full_name, u.username, u.email, u.avatar_url, u.judge_level, u.debater_level, u.institution,
          sm.role, sm.is_host, sm.status as member_status
   FROM spars s
   LEFT JOIN spar_members sm ON s.id = sm.spar_id
@@ -157,6 +158,13 @@ export async function getAvailableSpars(pool: DbClient, userId?: string): Promis
   }
   query += ` ORDER BY s.start_time ASC`;
   return fetchSparsWithMembers(pool, query, params, userId);
+}
+
+export async function getSparDetails(pool: DbClient, sparId: string, userId?: string): Promise<SparWithMembers | null> {
+  await lazyManageSpars(pool);
+  const query = `${SPAR_SELECT} WHERE s.id = $1`;
+  const spars = await fetchSparsWithMembers(pool, query, [sparId], userId);
+  return spars[0] || null;
 }
 
 export async function getMyActiveSpars(pool: DbClient, userId: string): Promise<SparWithMembers[]> {

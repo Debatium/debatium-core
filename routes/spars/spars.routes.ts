@@ -9,6 +9,7 @@ import {
   matchingRequestSparService, acceptRequestSparService, declineRequestSparService,
   leaveSparService, kickMemberSparService, cancelSparService, cancelMatchingSparService,
   startDebateSparService, startEvaluationSparService,
+  getSparDetailsService, updateSparMotionService,
 } from "./spars.services.js";
 
 function classifyPgError(err: unknown, context?: string): { code: ErrorCode; message: string; status: number } | null {
@@ -312,6 +313,39 @@ export function createSparsRouter(isProd: boolean): Router {
         res.status(200).json({ message: "Spar cancelled successfully" });
       } catch (err) {
         const pgInfo = classifyPgError(err, "cancel");
+        if (pgInfo) return errorResponse(res, pgInfo.status, pgInfo.code, pgInfo.message);
+        next(err);
+      }
+    }
+  );
+
+  // GET /spars/:sparId — Get details of a single spar
+  router.get(
+    "/:sparId",
+    requireAuth(isProd),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const spar = await getSparDetailsService(req.userId as string | undefined, req.params.sparId as string);
+        if (!spar) {
+          return errorResponse(res, 404, ErrorCode.NOT_FOUND, "Spar not found");
+        }
+        res.status(200).json(spar);
+      } catch (err) {
+        next(err);
+      }
+    }
+  );
+
+  // PUT /spars/:sparId/motion — Update spar motion
+  router.put(
+    "/:sparId/motion",
+    requireAuth(isProd),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        await updateSparMotionService(req.userId as string, req.params.sparId as string, req.body.motion);
+        res.status(200).json({ message: "Spar motion updated successfully" });
+      } catch (err) {
+        const pgInfo = classifyPgError(err, "update");
         if (pgInfo) return errorResponse(res, pgInfo.status, pgInfo.code, pgInfo.message);
         next(err);
       }
