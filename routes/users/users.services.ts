@@ -139,7 +139,7 @@ export async function updateUserService(
   if ("institution" in data) updateData.institution = new Institution(data.institution as string | null).value;
   if ("password" in data) updateData.passwordHash = await hashPassword(new Password(data.password as string).value);
   if ("email" in data) updateData.email = new Email(data.email as string).value;
-  if ("avatarURL" in data) updateData.avatarURL = new AvatarURL(Number(data.avatarURL)).value;
+  if ("avatarURL" in data) updateData.avatarURL = new AvatarURL(data.avatarURL as string | number).value;
 
   // 3. Execute update transaction
   const client = await pool.connect();

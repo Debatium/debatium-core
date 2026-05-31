@@ -17,8 +17,24 @@ import { NotificationEventType } from "../../db/notifications/domain.js";
 import { createNotification, notifyInAppAndEmail } from "../notifications/notifications.services.js";
 import { NotificationChannel } from "../../db/notifications/domain.js";
 import { freezeBalance, refundBalance } from "../../db/users/queries.js";
+import { getPresignedViewUrl } from "../../utils/s3Service.js";
 
 const SPAR_FEE = 10;
+
+async function resolveSparAvatars(spars: SparWithMembers[]): Promise<SparWithMembers[]> {
+  for (const spar of spars) {
+    for (const member of spar.members) {
+      if (typeof member.avatarURL === 'string' && member.avatarURL.startsWith('avatars/')) {
+        member.avatarURL = await getPresignedViewUrl(member.avatarURL);
+      } else if (typeof member.avatarURL === 'string' && /^[0-9]+$/.test(member.avatarURL)) {
+        member.avatarURL = `https://i.pravatar.cc/150?img=${member.avatarURL}`;
+      } else if (typeof member.avatarURL === 'number') {
+        member.avatarURL = `https://i.pravatar.cc/150?img=${member.avatarURL}`;
+      }
+    }
+  }
+  return spars;
+}
 
 interface InviteInput {
   email?: string;
@@ -247,7 +263,8 @@ export async function updateSparService(userId: string, data: Record<string, unk
 
 export async function listAvailableSparsService(userId?: string): Promise<SparWithMembers[]> {
   const pool = getPool();
-  return getAvailableSpars(pool, userId);
+  const spars = await getAvailableSpars(pool, userId);
+  return resolveSparAvatars(spars);
 }
 
 export async function listMyActiveSparsService(userId: string): Promise<SparWithMembers[]> {
@@ -261,12 +278,13 @@ export async function listMyActiveSparsService(userId: string): Promise<SparWith
       s.notifications = s.members.filter(m => m.status === "invited" && m.userId === userId);
     }
   }
-  return spars;
+  return resolveSparAvatars(spars);
 }
 
 export async function listMyHistorySparsService(userId: string): Promise<SparWithMembers[]> {
   const pool = getPool();
-  return getMyHistorySpars(pool, userId);
+  const spars = await getMyHistorySpars(pool, userId);
+  return resolveSparAvatars(spars);
 }
 
 export async function requestJoinSparService(userId: string, data: Record<string, unknown>): Promise<void> {
@@ -770,6 +788,7 @@ export async function getSparDetailsService(userId: string | undefined, sparId: 
     (judgeMember as any).tournamentEntries = profile?.tournamentEntries || [];
   }
 
+  await resolveSparAvatars([spar]);
   return spar;
 }
 

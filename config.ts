@@ -9,6 +9,10 @@ export interface AppConfig {
   resendApiKey: string;
   feUrl: string;
   logFilePath?: string;
+  awsS3AccessKey: string;
+  awsS3SecretAccessKey: string;
+  awsRegion: string;
+  awsS3BucketName: string;
 }
 
 const isProd = process.env.MODE !== "dev";
@@ -25,6 +29,10 @@ const configs: Record<string, AppConfig> = {
     resendApiKey: process.env.RESEND_API_KEY || "",
     feUrl: process.env.FE_URL || "http://localhost:5173",
     logFilePath: process.env.LOG_FILE_PATH,
+    awsS3AccessKey: process.env.AWS_S3_ACCESS_KEY || "",
+    awsS3SecretAccessKey: process.env.AWS_S3_SECRET_ACCESS_KEY || "",
+    awsRegion: process.env.AWS_REGION || "",
+    awsS3BucketName: process.env.AWS_S3_BUCKET_NAME || "",
   },
   prod: {
     isProd: true,
@@ -37,6 +45,10 @@ const configs: Record<string, AppConfig> = {
     resendApiKey: process.env.RESEND_API_KEY || "",
     feUrl: process.env.FE_URL || "",
     logFilePath: process.env.LOG_FILE_PATH,
+    awsS3AccessKey: process.env.AWS_S3_ACCESS_KEY || "",
+    awsS3SecretAccessKey: process.env.AWS_S3_SECRET_ACCESS_KEY || "",
+    awsRegion: process.env.AWS_REGION || "",
+    awsS3BucketName: process.env.AWS_S3_BUCKET_NAME || "",
   },
   testing: {
     isProd: false,
@@ -49,6 +61,10 @@ const configs: Record<string, AppConfig> = {
     resendApiKey: process.env.RESEND_API_KEY || "",
     feUrl: process.env.FE_URL || "http://localhost:5173",
     logFilePath: process.env.LOG_FILE_PATH,
+    awsS3AccessKey: process.env.AWS_S3_ACCESS_KEY || "",
+    awsS3SecretAccessKey: process.env.AWS_S3_SECRET_ACCESS_KEY || "",
+    awsRegion: process.env.AWS_REGION || "",
+    awsS3BucketName: process.env.AWS_S3_BUCKET_NAME || "",
   },
 };
 

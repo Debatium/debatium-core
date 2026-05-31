@@ -76,10 +76,12 @@ export class Institution {
 }
 
 export class AvatarURL {
-  readonly value: number;
-  constructor(raw: number) {
-    if (raw < 1 || raw > 10) throw new DomainValidationError("Avatar URL must be between 1 and 10");
-    this.value = raw;
+  readonly value: string;
+  constructor(raw: string | number) {
+    const val = String(raw).trim();
+    if (!val) throw new DomainValidationError("Avatar URL cannot be empty");
+    if (val.length > 500) throw new DomainValidationError("Avatar URL too long");
+    this.value = val;
   }
 }
 

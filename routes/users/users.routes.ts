@@ -1,4 +1,6 @@
 import { Router, Request, Response, NextFunction } from "express";
+import multer from "multer";
+import { uploadFileBuffer, getPresignedViewUrl } from "../../utils/s3Service.js";
 import { validateJson } from "../../middleware/validateJson.js";
 import { requireAuth } from "../../middleware/requireAuth.js";
 import { ErrorCode, errorResponse } from "../../utils/errors.js";
@@ -41,6 +43,36 @@ function classifyPgError(err: unknown): { code: ErrorCode; message: string; stat
 
 export function createUsersRouter(isProd: boolean): Router {
   const router = Router();
+  const upload = multer({ storage: multer.memoryStorage() });
+
+  // POST /users/profile/avatar — Upload avatar
+  router.post(
+    "/profile/avatar",
+    requireAuth(isProd),
+    upload.single("avatar"),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        if (!req.file) {
+          return errorResponse(res, 400, ErrorCode.MISSING_REQUIRED_FIELD, "No avatar file provided");
+        }
+
+        const fileExtension = req.file.originalname.split(".").pop() || "webp";
+        const s3Key = `avatars/user-${req.userId}-${Date.now()}.${fileExtension}`;
+
+        await uploadFileBuffer(req.file.buffer, s3Key, req.file.mimetype);
+        
+        // Update user profile in DB with the new s3Key
+        await updateUserService(req.userId!, { avatarURL: s3Key });
+        
+        // Generate a presigned URL to return immediately
+        const avatarUrl = await getPresignedViewUrl(s3Key);
+
+        res.status(200).json({ success: { message: "Avatar uploaded successfully" }, avatarUrl });
+      } catch (err) {
+        next(err);
+      }
+    }
+  );
 
   // PUT /users/profile — Update profile
   router.put(
@@ -74,6 +106,14 @@ export function createUsersRouter(isProd: boolean): Router {
           return errorResponse(res, 404, ErrorCode.INVALID_FIELD_VALUE, "User profile not found");
         }
         profile.id = req.userId!;
+        
+        if (typeof profile.avatarURL === "string" && profile.avatarURL.startsWith("avatars/")) {
+          profile.avatarURL = await getPresignedViewUrl(profile.avatarURL);
+        } else if (typeof profile.avatarURL === "string" && /^[0-9]+$/.test(profile.avatarURL)) {
+           // fallback for legacy int avatar URLs
+           profile.avatarURL = `https://i.pravatar.cc/150?img=${profile.avatarURL}`;
+        }
+        
         res.status(200).json(profile);
       } catch (err) {
         next(err);
